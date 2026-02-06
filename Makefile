@@ -1,27 +1,37 @@
 NAME = webserv
-CC = c++
-CFLAGS = -Wall -Wextra -Werror -std=c++98
+CXX = c++
+CXXFLAGS = -Wall -Wextra -Werror -std=c++98
 
-CFILES = srcs/main.cpp \
-		 srcs/server_socket.cpp
+INC			= inc/
+SRCS_DIR	= srcs/
+CFILES		= main.cpp \
+		 	ServerSocket.cpp
+
 
 ODIR = build
 
-OFILES = $(addprefix $(ODIR)/, $(notdir $(CFILES:.cpp=.o)))
+INCLUDES	= -I$(INC)
+SRCS		= $(addprefix $(SRCS_DIR), $(CFILES))
+OFILES		= $(addprefix $(ODIR)/, $(notdir $(CFILES:.cpp=.o)))
 
 all: $(NAME)
 
-$(ODIR)/%.o: %.cpp
+$(ODIR)/%.o: $(SRCS_DIR)%.cpp
 	@mkdir -p $(ODIR)
-	@$(CC) $(CFLAGS) -c $< -o $@
+	@echo "🛠️  Compiling $<"
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(NAME): $(OFILES)
-	$(CC) $(CFLAGS) $(OFILES) -o $(NAME)
+	@echo "🔗 Linking $(NAME)..."
+	$(CXX) $(CXXFLAGS) $(OFILES) -o $(NAME)
+	@echo "✅ $(NAME) compiled successfully!"
 
 clean:
+	@echo "🧹 Cleaning objects..."
 	rm -rf $(ODIR)
 
 fclean: clean
+	@echo "🧼 Removing executable..."
 	rm -f $(NAME)
 
 re: fclean all
