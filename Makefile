@@ -5,7 +5,8 @@ CXXFLAGS = -Wall -Wextra -Werror -std=c++98
 INC			= inc/
 SRCS_DIR	= srcs/
 CFILES		= main.cpp \
-		 	ServerSocket.cpp
+		 	ServerSocket.cpp \
+			utils.cpp
 
 
 ODIR = build
@@ -19,7 +20,7 @@ all: $(NAME)
 $(ODIR)/%.o: $(SRCS_DIR)%.cpp
 	@mkdir -p $(ODIR)
 	@echo "🛠️  Compiling $<"
-	@$(CXX) $(CXXFLAGS) -c $< -o $@
+	@$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 $(NAME): $(OFILES)
 	@echo "🔗 Linking $(NAME)..."
