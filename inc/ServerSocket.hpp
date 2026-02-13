@@ -12,6 +12,7 @@
 # include <string.h>
 # include <iostream>
 # include <fcntl.h>
+# include <fstream>
 # include "utils.hpp"
 
 class ServerSocket

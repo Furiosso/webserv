@@ -1,22 +1,32 @@
 #include "ServerSocket.hpp"
 #include <poll.h>
 #include <map>
+#include "Parser.hpp"
 
 int main (int argc, char** argv, char** env)
 {
     (void)argv;
     (void)env;
+
     if (argc != 2)
     {
         // include error message here
         return 1;
     }
-    ServerSocket prueba("80");
-    struct pollfd* fds;
-    fds->fd = prueba.get_fd();
-    fds->events = POLLIN;
-    int nfds = 1;
-    while (true)
+    try
+    {    
+        Parser parser(argv[1]);
+        /*ServerSocket prueba("80");
+        struct pollfd* fds;
+        fds->fd = prueba.get_fd();
+        fds->events = POLLIN;
+        int nfds = 1;*/
+    }
+    catch (const std::exception& e)
+    {
+        std::cout << e.what() << std::endl;
+    }
+    /*while (true)
     {
         if (poll(fds, 1, -1))
         {
@@ -40,5 +50,5 @@ int main (int argc, char** argv, char** env)
                 }
             }
         }
-    }
+    }*/
 }
