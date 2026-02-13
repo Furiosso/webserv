@@ -27,3 +27,16 @@ std::string rtrim(std::string& line)
         return "";
     return line.substr(0, end + 1);
 }
+
+std::string trim(std::string& line)
+{
+    size_t i = 0;
+
+    if (line.empty())
+        return line;
+    while (line[i] && std::isspace(static_cast<unsigned char>(line[i])))
+        i++;
+    if (i == line.size())
+        return "";
+    return line.substr(0, line.size() - i);
+}
