@@ -1,4 +1,5 @@
-#include <stddef.h>
+#include "utils.hpp"
+
 
 void    ft_bzero(void *s, size_t n)
 {
@@ -12,4 +13,17 @@ void    ft_bzero(void *s, size_t n)
         buff[i] = 0;
         ++i;
     }
+}
+
+std::string rtrim(std::string& line)
+{
+    size_t end = line.size() - 1;
+
+    if (line.empty())
+        return line;
+    while ((end > 0 && std::isspace(static_cast<unsigned char>(line[end]))))
+        end--;
+    if (end == 0 && std::isspace(static_cast<unsigned char>(line[0])))
+        return "";
+    return line.substr(0, end + 1);
 }
