@@ -8,6 +8,40 @@
 # include <sstream>
 # include "utils.hpp"
 
+const std::string   configkeys[15] =
+{
+    "listen",
+    "server_name",
+    "error_page",
+    "client_max_body_size",
+    "root",
+    "index",
+    "autoindex",
+    "cgi_path",
+    "cgi_ext",
+    "return",
+    "upload_store",
+    "upload_pass",
+    "cgi_pass",
+    "alias",
+    "accept_method"
+};
+
+typedef enum s_token
+{
+    A_INI, //inicial
+    A_ERR, //error
+    A_SER, //server
+    A_BFI, //llave de apertura
+    A_LIS, //listen
+    A_ROO, //root
+    A_SEM, //punto y coma;
+    A_BLA, //llave de cesura
+    A_INP, //input
+    A_LOC,  //location
+    A_LIN  //Location input
+} t_token;
+
 class Parser
 {
     private:
