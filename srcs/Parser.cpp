@@ -1,20 +1,20 @@
 #include "Parser.hpp"
 
-int     chooseState(int prev, int pos)
+int     getState(int prev, int pos)
 {
     static int tokens[][11] = {
-        {1, 2, 1, 1, 1, 1, 1, 1, 1,  1,  1}, //  0 INI
-        {1, 1, 1, 1, 1, 1, 1, 1, 1,  1,  1}, //  1 Error
-        {1, 1, 3, 1, 1, 1, 1, 1, 1,  1,  1}, //  2 SERVER
-        {1, 1, 1, 1, 5, 1, 1, 1, 9,  1,  1}, //  3 SERVER_OP
-        {1, 2, 1, 1, 1, 1, 1, 1, 1,  1,  1}, //  4 SERVER_CL
-        {1, 1, 1, 1, 1, 6, 1, 1, 1,  1,  1}, //  5 LOCATION
-        {1, 1, 1, 1, 1, 1, 7, 1, 1,  1,  1}, //  6 LOCATION_URI
-        {1, 1, 1, 1, 1, 1, 1, 8, 9,  1,  1}, //  7 LOCATION_OP
-        {1, 1, 1, 4, 5, 1, 1, 1, 1,  1,  1}, //  8 LOCATION_CL
-        {1, 1, 1, 1, 1, 1, 1, 1, 1, 10,  1}, //  9 KEYWORD
-        {1, 1, 1, 1, 1, 1, 1, 1, 1, 10, 11}, // 10 PARAMETER
-        {1, 1, 1, 1, 5, 1, 1, 8, 9,  1,  1}, // 11 SEMICOLON
+        {S_ERR, S_SER, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR}, //  0 INI
+        {S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR}, //  1 Error
+        {S_ERR, S_ERR, S_SOP, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR}, //  2 SERVER
+        {S_ERR, S_ERR, S_ERR, S_ERR, S_LOC, S_ERR, S_ERR, S_ERR, S_KEY, S_ERR, S_ERR}, //  3 SERVER_OP
+        {S_ERR, S_SER, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR}, //  4 SERVER_CL
+        {S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_LUR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR}, //  5 LOCATION
+        {S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_LOP, S_ERR, S_ERR, S_ERR, S_ERR}, //  6 LOCATION_URI
+        {S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_LCL, S_KEY, S_ERR, S_ERR}, //  7 LOCATION_OP
+        {S_ERR, S_ERR, S_ERR, S_SCL, S_LOC, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR}, //  8 LOCATION_CL
+        {S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_PAR, S_ERR}, //  9 KEYWORD
+        {S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_PAR, S_SEM}, // 10 PARAMETER
+        {S_ERR, S_ERR, S_ERR, S_SCL, S_LOC, S_ERR, S_ERR, S_LCL, S_KEY, S_ERR, S_ERR}, // 11 SEMICOLON
     };
     return tokens[prev][pos];
 }
@@ -29,7 +29,7 @@ int    isConfigWord(std::string& token)
     return 0;
 }
 
-int     getterState(std::vector<std::string>& tokens)
+int     Parser::chooseState(std::vector<std::string>& tokens)
 {
     int prev = 0;
     int  is_serv;
@@ -76,7 +76,7 @@ int     getterState(std::vector<std::string>& tokens)
                 pos = 5;
         }
         //std::cout << "prev:" << prev << " pos: " << pos << " tokens[i]: " << tokens[i] << "\n";
-        prev = chooseState(prev, pos);
+        prev = getState(prev, pos);
         if (prev == 1)
         {
             std::cerr << "Syntax error\n";
@@ -106,6 +106,11 @@ void    Parser::rmComments(std::ifstream& config_file)
     }
 }
 
+/*void    Parser::listenParser(std::vector<std::string>& tokens)
+{
+
+}*/
+
 Parser::Parser(const char* in_file)
 {
 	std::ifstream   config_file(in_file);
@@ -114,8 +119,9 @@ Parser::Parser(const char* in_file)
     //tokenizar y parsear
     this->rmComments(config_file);
     this->tokenize();
-    if (getterState(this->_tokens))
+    if (this->chooseState(this->_tokens))
         ;
+    //this->listenParser();
     /*for (size_t i = 0; i < this->_tokens.size(); i++)
        std::cout << this->_tokens[i] << std::endl;
     for (size_t i = 0; i < this->_config_file.size(); i++)

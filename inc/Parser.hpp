@@ -27,26 +27,29 @@ const std::string   configkeys[15] =
     "accept_method"
 };
 
-typedef enum s_token
+enum State
 {
-    A_INI, //inicial
-    A_ERR, //error
-    A_SER, //server
-    A_BFI, //llave de apertura
-    A_LIS, //listen
-    A_ROO, //root
-    A_SEM, //punto y coma;
-    A_BLA, //llave de cesura
-    A_INP, //input
-    A_LOC,  //location
-    A_LIN  //Location input
-} t_token;
+    S_INI,
+    S_ERR,
+    S_SER,
+    S_SOP,
+    S_SCL,
+    S_LOC,
+    S_LUR,
+    S_LOP,
+    S_LCL,
+    S_KEY,
+    S_PAR,
+    S_SEM
+};
 
 class Parser
 {
     private:
         std::string                 _config_file;
         std::vector<std::string>    _tokens;
+        //void                        listenParser(std::vector<std::string>& tokens);
+        int                         chooseState(std::vector<std::string>& tokens);
     public:
         Parser(const char* in_file);
         //Parser(const Parser& other);
