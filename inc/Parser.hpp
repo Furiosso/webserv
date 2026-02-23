@@ -5,7 +5,9 @@
 # include <vector>
 # include <fstream>
 # include <iostream>
+# include <map>
 # include <sstream>
+# include <iterator>
 # include "utils.hpp"
 
 const std::string   configkeys[15] =
@@ -24,7 +26,7 @@ const std::string   configkeys[15] =
     "upload_pass",
     "cgi_pass",
     "alias",
-    "accept_method"
+    "allowed_methods"
 };
 
 enum State
@@ -43,13 +45,30 @@ enum State
     S_SEM
 };
 
+enum IPV4State
+{
+    IP_ER,
+    IP_00,
+    IP_01,
+    IP_02,
+    IP_03,
+    IP_05,
+    IP_PO,
+    IP_NU
+};
+
 class Parser
 {
     private:
-        std::string                 _config_file;
-        std::vector<std::string>    _tokens;
-        //void                        listenParser(std::vector<std::string>& tokens);
-        int                         chooseState(std::vector<std::string>& tokens);
+        std::string                         _config_file;
+        std::vector<std::string>            _tokens;
+        std::map<std::string, std::string>  _listens;
+        std::vector<int>                    _lflags;
+        void                                listenParser(std::vector<std::string>::iterator& it);
+        bool                                check_ipv4(std::string t);
+        bool                                check_port(std::string t);
+        int                                 chooseState(std::vector<std::string>& tokens);
+        int                                 getIPV4State(int prev, int pos);
     public:
         Parser(const char* in_file);
         //Parser(const Parser& other);

@@ -106,14 +106,147 @@ void    Parser::rmComments(std::ifstream& config_file)
     }
 }
 
-/*void    Parser::listenParser(std::vector<std::string>& tokens)
+int     Parser::getIPV4State(int prev, int pos)
 {
+    static int tokens[][8] = {
+        {IP_ER, IP_00, IP_01, IP_02, IP_NU, IP_NU, IP_ER, IP_ER}, //  0 INI
+        {IP_ER, IP_ER, IP_ER, IP_ER, IP_ER, IP_ER, IP_PO, IP_ER}, // IP_00
+        {IP_ER, IP_01, IP_01, IP_01, IP_01, IP_01, IP_PO, IP_01}, // IP_01
+        {IP_ER, IP_01, IP_01, IP_01, IP_01, IP_05, IP_PO, IP_00}, // IP_02
+        {IP_ER, IP_ER, IP_ER, IP_ER, IP_ER, IP_ER, IP_ER, IP_ER}, // IP_03
+        {IP_ER, IP_00, IP_00, IP_00, IP_00, IP_00, IP_PO, IP_ER}, // IP_05
+        {IP_ER, IP_00, IP_01, IP_02, IP_NU, IP_NU, IP_ER, IP_NU}, // IP_PO
+        {IP_ER, IP_00, IP_00, IP_00, IP_00, IP_00, IP_PO, IP_00} // IP_NU
+        //{}, // IP_22
+    };
+    return tokens[prev][pos];
+}
 
-}*/
+bool    Parser::check_ipv4(std::string t)
+{
+    int prev = 0;
+    int pos;
+    int len = 0;
+    size_t i = 0;
+    if (t == "localhost")
+        return (true);
+    for (; i < t.length(); i++)
+    {
+        pos = 0;
+        if (std::isdigit(t[i]) && t[i] == '0')
+        {
+            pos = 1;
+            len++;
+        }
+        else if (std::isdigit(t[i]) && t[i] == '1')
+        {
+            pos = 2;
+            len++;
+        }
+        else if (std::isdigit(t[i]) && t[i] == '2')
+        {
+            pos = 3;
+            len++;
+        }
+        else if (std::isdigit(t[i]) && ((t[i] == '3') || (t[i] == '4')))
+        {
+            pos = 4;
+            len++;
+        }
+        else if (std::isdigit(t[i]) && t[i] == '5')
+        {
+            pos = 5;
+            len++;
+        }
+        else if (t[i] == '.')
+        {
+            pos = 6;
+            len = 0;
+        }
+        else if (std::isdigit(t[i]) && t[i] > '5' && t[i] <= '9')
+        {
+            pos = 7;
+            len++;
+        }
+        prev = getIPV4State(prev, pos);
+        if (prev == 0 || len > 3)
+            return (false);
+    }
+    if (!std::isdigit(t[i - 1]))
+        return false;
+    return (true);
+}
+
+bool   Parser::check_port(std::string t)
+{
+    std::stringstream   parse;
+    long long           n;
+    std::string::iterator   it = t.begin();
+    std::string::iterator   end = t.end();
+    
+    while (it != end)
+    {
+        if (!std::isdigit(*it))
+            return false;
+        ++it;
+    }
+    parse << t;
+    parse >> n;
+    if (n > 65535 || n < 0)
+        return false;
+    return true;
+}
+
+void    Parser::listenParser(std::vector<std::string>::iterator& it)
+{
+    if (*(it + 2) != ";")
+        throw std::exception();
+    ++it;
+    std::string t = *it;
+    size_t  pos = t.find(':');
+    if (pos != std::string::npos)
+    {
+        std::string ip = t.substr(0, pos);
+        std::string port = t.substr(pos + 1);
+            
+        if (ip.size() == 0 || port.size() == 0 || !check_ipv4(ip) || !check_port(port))
+            throw std::exception();
+        if (ip == "localhost")
+            ip = "127.0.0.1";
+        ++it;
+        _listens.insert(std::pair<std::string, std::string>(ip, port));
+    }
+    else
+    {    
+        bool    ip = false;
+        bool    port = false;
+            
+        ip = check_ipv4(t);
+        port = check_port(t);
+        if (ip)
+        {
+            if (t == "localhost")
+                t = "127.0.0.1";
+            _listens.insert(std::pair<std::string, std::string>(t, "80"));
+            ++it;
+            return ;
+        }
+        if (port)
+        {
+            _listens.insert(std::pair<std::string, std::string>("127.0.0.1", t));
+            ++it;
+            return ;
+        }
+        throw std::exception();
+    }
+}
 
 Parser::Parser(const char* in_file)
 {
 	std::ifstream   config_file(in_file);
+    std::vector<std::string>::iterator  it;
+    std::vector<std::string>::iterator  end;
+
     if (!config_file.is_open())
         throw std::runtime_error("Could not open config file\n");
     //tokenizar y parsear
@@ -121,7 +254,14 @@ Parser::Parser(const char* in_file)
     this->tokenize();
     if (this->chooseState(this->_tokens))
         ;
-    //this->listenParser();
+    it = _tokens.begin();
+    end = _tokens.end();
+
+    for (; it != end; ++it)
+    {
+        if (*it == "listen")
+            this->listenParser(it);
+    }
     /*for (size_t i = 0; i < this->_tokens.size(); i++)
        std::cout << this->_tokens[i] << std::endl;
     for (size_t i = 0; i < this->_config_file.size(); i++)
@@ -131,7 +271,11 @@ Parser::Parser(const char* in_file)
 }
 
 Parser::~Parser()
-{}
+{
+    _tokens.clear();
+    _listens.clear();
+    _lflags.clear();
+}
 
 void    Parser::tokenize()
 {
