@@ -128,6 +128,7 @@ bool    Parser::check_ipv4(std::string t)
     int pos;
     int len = 0;
     size_t i = 0;
+
     if (t == "localhost")
         return (true);
     for (; i < t.length(); i++)
@@ -179,8 +180,8 @@ bool    Parser::check_ipv4(std::string t)
 
 bool   Parser::check_port(std::string t)
 {
-    std::stringstream   parse;
-    long long           n;
+    std::stringstream       parse;
+    long long               n;
     std::string::iterator   it = t.begin();
     std::string::iterator   end = t.end();
     
@@ -241,6 +242,135 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it)
     }
 }
 
+int     Parser::getClientMaxBodySizeState(int prev, int pos)
+{
+    static int tokens[][3] = {
+        {BD_ERR, BD_NUM, BD_ERR}, // 0 INI
+        {BD_ERR, BD_NUM, BD_CHR}, // 1 BD_NUM
+        {BD_ERR, BD_ERR, BD_ERR}  // 2 BD_CHR
+    };
+    return tokens[prev][pos];
+}
+
+
+bool    Parser::checkclientmaxbodysize(std::string t)
+{
+    int prev = 0;
+    int pos;
+    std::string::iterator   it = t.begin();
+    std::string::iterator   end = t.end();
+
+    for (; it != end; ++it)
+    {
+        pos = 0;
+        if (std::isdigit(*it))
+            pos = 1;
+        else if (*it == 'g' || *it == 'G' || *it == 'k' || *it == 'K' || *it == 'm' || *it == 'M')
+            pos = 2;
+        prev = getClientMaxBodySizeState(prev, pos);
+        if (prev == 0)
+            return false;
+    }
+    return true;
+}
+
+
+void    Parser::clientmaxbodysizeParser(std::vector<std::string>::iterator& it)
+{
+    std::stringstream   parse;
+    long long           n;
+
+    if (*(it + 2) != ";")
+        throw std::exception();
+    ++it;
+    parse << *it;
+    parse >> n;
+    if (n < 0 || n > std::numeric_limits<int>::max())
+        throw std::exception();
+    if (checkclientmaxbodysize(*it) == false)
+        throw std::exception();
+}
+
+void    Parser::autoindexParser(std::vector<std::string>::iterator& it)
+{
+    if (*(it + 2) != ";")
+        throw std::exception();
+    ++it;
+    if (*it != "on" && *it != "off")
+        throw std::exception();
+    ++it;
+}
+
+void	Parser::allowedParser(std::vector<std::string>::iterator& it)
+{
+	++it;
+	while (*it != ";")
+	{
+		if (*it != "GET" || *it != "POST" || *it != "DELETE")
+			throw std::exception();
+		++it;
+	}
+}
+
+int		Parser::getServerNameState(int prev, int pos)
+{
+	static int	matrix[][7] = {
+		{1, 1, 2, 2, 2, 2, 1},
+		{1, 1, 1, 1, 1, 1, 1}, //error
+		{1, 3, 2, 2, 2, 2, 1}, //cualquier caracter
+		{1, 1, 4, 2, 2, 2, 1}, //.
+		{1, 3, 2, 5, 2, 2, 1}, //c
+		{1, 3, 2, 2, 6, 2, 1}, //o
+		{1, 3, 2, 2, 2, 2, 1}, //m
+	};
+	return (matrix[prev][pos]);
+}
+
+void	Parser::serverNameParser(std::vector<std::string>::iterator& it)
+{
+	std::stringstream	parse;
+	std::string			str;
+	int					prev = 0;
+	int					pos;
+	it++;
+	while (*it != ";")
+	{
+		size_t		i = 0;
+		parse << *it;
+		parse >> str;
+		prev = 0;
+		while (i < str.length())
+		{
+			pos = 0;
+			if (str[i] == '.')
+                pos = 1;
+			else if (str[i] == 'c')
+				pos = 2;
+			else if (str[i] == 'o')
+				pos = 3;
+			else if (str[i] == 'm')
+				pos = 4;
+			else if (std::isprint(str[i]) && str[i] != '*')
+				pos = 5;
+			else
+				pos = 6;
+			prev = getServerNameState(prev, pos);
+			if (prev == 1)
+			{
+				std::cout << "servernameparser1\n";
+				throw std::exception();
+			}
+			i++;
+		}
+		if (prev != 6)
+		{
+			std::cout << "servernameparser1\n";
+			throw std::exception();
+		}
+		++it;
+	}
+}
+
 Parser::Parser(const char* in_file)
 {
 	std::ifstream   config_file(in_file);
@@ -261,6 +391,14 @@ Parser::Parser(const char* in_file)
     {
         if (*it == "listen")
             this->listenParser(it);
+        if (*it == "autoindex")
+            this->autoindexParser(it);
+        if (*it == "allowed_methods")
+            this->allowedParser(it);
+		if (*it == "server_name")
+			this->serverNameParser(it);
+		if (*it == "client_max_body_size")
+			this->clientmaxbodysizeParser(it);
     }
     /*for (size_t i = 0; i < this->_tokens.size(); i++)
        std::cout << this->_tokens[i] << std::endl;

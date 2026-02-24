@@ -8,17 +8,18 @@
 # include <map>
 # include <sstream>
 # include <iterator>
+# include <limits>
 # include "utils.hpp"
 
 const std::string   configkeys[15] =
 {
-    "listen",
-    "server_name",
+    "listen", //done
+    "server_name", // done
     "error_page",
-    "client_max_body_size",
+    "client_max_body_size", // done
     "root",
     "index",
-    "autoindex",
+    "autoindex", // done
     "cgi_path",
     "cgi_ext",
     "return",
@@ -26,10 +27,10 @@ const std::string   configkeys[15] =
     "upload_pass",
     "cgi_pass",
     "alias",
-    "allowed_methods"
+    "allowed_methods" // done
 };
 
-enum State
+enum    State
 {
     S_INI,
     S_ERR,
@@ -45,7 +46,7 @@ enum State
     S_SEM
 };
 
-enum IPV4State
+enum    IPV4State
 {
     IP_ER,
     IP_00,
@@ -57,6 +58,13 @@ enum IPV4State
     IP_NU
 };
 
+enum    bodySizeState
+{
+    BD_ERR,
+    BD_NUM,
+    BD_CHR
+};
+
 class Parser
 {
     private:
@@ -65,10 +73,17 @@ class Parser
         std::map<std::string, std::string>  _listens;
         std::vector<int>                    _lflags;
         void                                listenParser(std::vector<std::string>::iterator& it);
+        void                                autoindexParser(std::vector<std::string>::iterator& it);
+        void                                allowedParser(std::vector<std::string>::iterator& it);
+        void                                clientmaxbodysizeParser(std::vector<std::string>::iterator& it);
+        void                                serverNameParser(std::vector<std::string>::iterator& it);
+        int		                            getServerNameState(int prev, int pos);
+        bool                                checkclientmaxbodysize(std::string t);
         bool                                check_ipv4(std::string t);
         bool                                check_port(std::string t);
         int                                 chooseState(std::vector<std::string>& tokens);
         int                                 getIPV4State(int prev, int pos);
+        int                                 getClientMaxBodySizeState(int prev, int pos);
     public:
         Parser(const char* in_file);
         //Parser(const Parser& other);
