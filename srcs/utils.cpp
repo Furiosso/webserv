@@ -40,3 +40,17 @@ std::string trim(std::string& line)
         return "";
     return line.substr(0, line.size() - i);
 }
+
+bool    strIsDigit(std::string str)
+{
+    std::string::iterator   it = str.begin();
+    std::string::iterator   end = str.end();
+
+    while (it != end)
+    {
+        if (!std::isdigit(*it))
+            return false;
+        ++it;
+    }
+    return  true;
+}

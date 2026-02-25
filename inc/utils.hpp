@@ -4,10 +4,12 @@
 # include <stddef.h>
 # include <iostream>
 # include <string>
+# include <cctype>
 
 
 void		ft_bzero(void* s, size_t n);
 std::string rtrim(std::string& line);
 std::string trim(std::string& line);
+bool        strIsDigit(std::string str);
 
 #endif

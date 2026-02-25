@@ -11,7 +11,7 @@ int     getState(int prev, int pos)
         {S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_LUR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR}, //  5 LOCATION
         {S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_LOP, S_ERR, S_ERR, S_ERR, S_ERR}, //  6 LOCATION_URI
         {S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_LCL, S_KEY, S_ERR, S_ERR}, //  7 LOCATION_OP
-        {S_ERR, S_ERR, S_ERR, S_SCL, S_LOC, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR}, //  8 LOCATION_CL
+        {S_ERR, S_ERR, S_ERR, S_SCL, S_LOC, S_ERR, S_ERR, S_ERR, S_KEY, S_ERR, S_ERR}, //  8 LOCATION_CL
         {S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_PAR, S_ERR}, //  9 KEYWORD
         {S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_PAR, S_SEM}, // 10 PARAMETER
         {S_ERR, S_ERR, S_ERR, S_SCL, S_LOC, S_ERR, S_ERR, S_LCL, S_KEY, S_ERR, S_ERR}, // 11 SEMICOLON
@@ -328,49 +328,163 @@ int		Parser::getServerNameState(int prev, int pos)
 
 void	Parser::serverNameParser(std::vector<std::string>::iterator& it)
 {
-	std::stringstream	parse;
 	std::string			str;
 	int					prev = 0;
 	int					pos;
+
 	it++;
 	while (*it != ";")
 	{
 		size_t		i = 0;
-		parse << *it;
-		parse >> str;
+		str = *it;
 		prev = 0;
-		while (i < str.length())
+
+		if (!check_ipv4(str))
 		{
-			pos = 0;
-			if (str[i] == '.')
-                pos = 1;
-			else if (str[i] == 'c')
-				pos = 2;
-			else if (str[i] == 'o')
-				pos = 3;
-			else if (str[i] == 'm')
-				pos = 4;
-			else if (std::isprint(str[i]) && str[i] != '*')
-				pos = 5;
-			else
-				pos = 6;
-			prev = getServerNameState(prev, pos);
-			if (prev == 1)
+			while (i < str.length())
+			{
+				pos = 0;
+				if (str[i] == '.')
+        	        pos = 1;
+				else if (str[i] == 'c')
+					pos = 2;
+				else if (str[i] == 'o')
+					pos = 3;
+				else if (str[i] == 'm')
+					pos = 4;
+				else if (std::isalpha(str[i]) && str[i] != '*')
+					pos = 5;
+				else
+					pos = 6;
+				prev = getServerNameState(prev, pos);
+				if (prev == 1)
+				{
+					std::cout << "servernameparser1\n";
+					throw std::exception();
+				}
+				i++;
+			}
+			if (prev != 6)
 			{
 				std::cout << "servernameparser1\n";
-				throw std::exception();
-			}
-			i++;
-		}
-		if (prev != 6)
-		{
-			std::cout << "servernameparser1\n";
 			throw std::exception();
+			}
 		}
 		++it;
 	}
 }
 
+int     Parser::getTypeOfItem(std::string& str)
+{
+    if (str.size() == 3 && strIsDigit(str) && (str[0] == '3' || str[0] == '4' || str[0] == '5'))
+        return 1;
+    if (str.size() == 4 && str[0] == '=' && strIsDigit(str.substr(1, 3)) && (str[1] == '1'
+        || str[1] == '2'
+        || str[1] == '3'
+        || str[1] == '4'
+        || str[1] == '5'))
+    {
+        return 2;
+    }
+    return 3;
+}
+
+int    Parser::getErrorPageParserState(int prev, int pos)
+{
+    static int matrix[][4] = {
+        {EP_ERR, EP_COD, EP_ERR, EP_ERR}, // INI
+        {EP_ERR, EP_COD, EP_OVR, EP_URI}, // EP_COD
+        {EP_ERR, EP_ERR, EP_ERR, EP_URI}, // EP_OVR
+        {EP_ERR, EP_ERR, EP_ERR, EP_ERR}  // EP_URI
+    };
+    
+    return matrix[prev][pos];
+}
+
+void    Parser::errorpageParser(std::vector<std::string>::iterator& it)
+{
+    int pos;
+    int prev = 0;
+
+    ++it;
+    while (*it != ";")
+    {
+        pos = getTypeOfItem(*it);
+        prev = getErrorPageParserState(prev, pos);
+        if (prev == 0)
+            throw std::exception();
+        ++it;
+    }
+    if (getTypeOfItem(*(it - 1)) != 3)
+        throw std::exception();
+}
+
+int		Parser::getIndexState(int prev, int pos)
+{
+	static int	matrix[][9] = {
+		{1, 1, 10, 10, 10, 10, 10, 10},
+		{1, 1,  1,  1,  1,  1,  1,  1}, //1 error
+		{1, 1,  3,  6,  1,  1,  1,  1}, //2 .
+		{1, 1,  1,  4,  1,  1,  1,  1}, //3 p
+		{1, 1,  5,  1,  1,  1,  1,  1}, //4 h
+		{1, 1,  1,  1,  1,  1,  1,  1}, //5 p2
+		{1, 1,  1,  1,  7,  1,  1,  1}, //6 h2
+		{1, 1,  1,  1,  1,  8,  1,  1}, //7 t
+		{1, 1,  1,  1,  1,  1,  9,  1}, //8 m
+		{1, 1,  1,  1,  1,  1,  1,  1}, //9 l
+		{1, 2, 10, 10, 10, 10, 10, 10}, //10 alpha
+	//	 e  .  p  h  t  m  l  a
+	};
+	return (matrix[prev][pos]);
+}
+
+
+void	Parser::chooseIndexState(std::string str)
+{
+	std::string::iterator	it = str.begin();
+	std::string::iterator	end= str.end();
+	int	pos;
+	int	prev = 0;
+	while (it != end)
+	{
+		pos = 0;
+		if (*it == '.')
+			pos = 1;
+		else if (*it == 'p')
+			pos = 2;
+		else if (*it ==  'h')
+			pos = 3;
+		else if (*it == 't')
+			pos = 4;
+		else if (*it == 'm')
+			pos = 5;
+		else if (*it == 'l')
+			pos = 6;
+		else if (std::isalpha(*it))
+			pos = 7;
+		prev = getIndexState(prev, pos);
+		if (prev == 1)
+			throw std::exception();
+		it++;
+	}
+	if (prev != 5 && prev != 8 && prev != 9)
+			throw std::exception();
+}
+
+void	Parser::indexParser(std::vector<std::string>::iterator& it)
+{
+	std::string			str;
+
+	++it;
+	while (*it != ";")
+	{
+		str = *it;
+		//std::cout << str;
+		chooseIndexState(str);
+		++it;
+	}
+	
+}
 Parser::Parser(const char* in_file)
 {
 	std::ifstream   config_file(in_file);
@@ -391,14 +505,18 @@ Parser::Parser(const char* in_file)
     {
         if (*it == "listen")
             this->listenParser(it);
-        if (*it == "autoindex")
+        else if (*it == "autoindex")
             this->autoindexParser(it);
-        if (*it == "allowed_methods")
+        else if (*it == "allowed_methods")
             this->allowedParser(it);
-		if (*it == "server_name")
+		else if (*it == "server_name")
 			this->serverNameParser(it);
-		if (*it == "client_max_body_size")
+		else if (*it == "client_max_body_size")
 			this->clientmaxbodysizeParser(it);
+        else if (*it == "error_page")
+            this->errorpageParser(it);
+        else if (*it == "index")
+            this->indexParser(it);
     }
     /*for (size_t i = 0; i < this->_tokens.size(); i++)
        std::cout << this->_tokens[i] << std::endl;

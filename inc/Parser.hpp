@@ -11,14 +11,15 @@
 # include <limits>
 # include "utils.hpp"
 
-const std::string   configkeys[15] =
+const std::string   configkeys[16] =
 {
     "listen", //done
     "server_name", // done
-    "error_page",
+    "error_page", // in progress dagimeno
     "client_max_body_size", // done
     "root",
-    "index",
+    "location",
+    "index", //done
     "autoindex", // done
     "cgi_path",
     "cgi_ext",
@@ -65,6 +66,14 @@ enum    bodySizeState
     BD_CHR
 };
 
+enum    errorpageState
+{
+    EP_ERR,
+    EP_COD,
+    EP_OVR,
+    EP_URI
+};
+
 class Parser
 {
     private:
@@ -77,6 +86,7 @@ class Parser
         void                                allowedParser(std::vector<std::string>::iterator& it);
         void                                clientmaxbodysizeParser(std::vector<std::string>::iterator& it);
         void                                serverNameParser(std::vector<std::string>::iterator& it);
+        void                                errorpageParser(std::vector<std::string>::iterator& it);
         int		                            getServerNameState(int prev, int pos);
         bool                                checkclientmaxbodysize(std::string t);
         bool                                check_ipv4(std::string t);
@@ -84,6 +94,12 @@ class Parser
         int                                 chooseState(std::vector<std::string>& tokens);
         int                                 getIPV4State(int prev, int pos);
         int                                 getClientMaxBodySizeState(int prev, int pos);
+        int                                 getErrorPageParserState(int prev, int pos);
+        int                                 getTypeOfItem(std::string& str);
+        void                                indexParser(std::vector<std::string>::iterator& it);
+        void	                            chooseIndexState(std::string str);
+        int                                 getIndexState(int prev, int pos);
+
     public:
         Parser(const char* in_file);
         //Parser(const Parser& other);
