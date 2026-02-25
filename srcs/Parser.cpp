@@ -283,11 +283,11 @@ void    Parser::clientmaxbodysizeParser(std::vector<std::string>::iterator& it)
     if (*(it + 2) != ";")
         throw std::exception();
     ++it;
+    if (checkclientmaxbodysize(*it) == false)
+        throw std::exception();
     parse << *it;
     parse >> n;
     if (n < 0 || n > std::numeric_limits<int>::max())
-        throw std::exception();
-    if (checkclientmaxbodysize(*it) == false)
         throw std::exception();
 }
 
