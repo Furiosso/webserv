@@ -25,8 +25,8 @@ const std::string   configkeys[16] =
     "return",
     "upload_store",
     "upload_pass",
-    "cgi",
-    "alias",
+    "cgi", // done
+    "alias", // to be done
     "allowed_methods" // done
 };
 
@@ -80,6 +80,13 @@ enum    errorpageState
     EP_URI
 };
 
+enum    locationState
+{
+    LO_ERR,
+    LO_EQU,
+    LO_PAT
+};
+
 class Parser
 {
     private:
@@ -108,6 +115,7 @@ class Parser
         void                                indexParser(std::vector<std::string>::iterator& it);
         void	                            chooseIndexState(std::string str);
         int                                 getIndexState(int prev, int pos);
+        int                                 getLocationState(int prev, int pos);
 
     public:
         Parser(const char* in_file);

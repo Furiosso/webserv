@@ -73,12 +73,22 @@ int     Parser::chooseState(std::vector<std::string>& tokens)
         {
             pos = 9;
             if (prev == 5)
+            {
+                if (tokens[i] == "=" && tokens[i + 1] != "{")
+                    i++;
+                else if (tokens[i] == "=" && tokens[i + 1] == "{")
+                {
+                    std::cerr << "Syntax error: " << tokens[i] << "\n";
+                    return 1;
+                }
                 pos = 5;
+            }
         }
         //std::cout << "prev:" << prev << " pos: " << pos << " tokens[i]: " << tokens[i] << "\n";
         prev = getState(prev, pos);
         if (prev == 1)
         {
+            std::cout << "prev:" << prev << " pos: " << pos << " tokens[i]: " << tokens[i] << "\n";
             std::cerr << "Syntax error\n";
             return 1;
         }
@@ -520,17 +530,35 @@ void    Parser::rootParser(std::vector<std::string>::iterator& it)
         throw std::exception();
 }
 
+int Parser::getLocationState(int prev, int pos)
+{
+    static int matrix[][3] = {
+        {LO_ERR, LO_EQU, LO_PAT}, // INI
+        {LO_ERR, LO_ERR, LO_PAT}, // LO_EQU
+        {LO_ERR, LO_ERR, LO_ERR}  // LO_PAT
+    };
+    
+    return (matrix[prev][pos]);
+}
+
 void    Parser::locationParser(std::vector<std::string>::iterator& it)
 {
+    int prev = 0;
+    int pos;
+
     ++it;
-    if (*it != "=" && access((*it).c_str(), F_OK) != 0)
-        throw std::exception();
-    ++it;
-    if (access((*it).c_str(), F_OK) != 0)
-        throw std::exception();
-    ++it;
-    if (*it != "{")
-        throw std::exception();
+    while (*it != "{")
+    {
+        std::cout << *it << "\n";
+        if (*it == "=")
+            pos = 1;
+        else
+            pos = 2;
+        prev = getLocationState(prev, pos);
+        if (prev == 0)
+            throw std::exception();
+        ++it;
+    }
 }
 
 Parser::Parser(const char* in_file)
@@ -553,23 +581,23 @@ Parser::Parser(const char* in_file)
     {
         if (*it == "listen")
             this->listenParser(it);
-        else if (*it == "autoindex")
+        if (*it == "autoindex")
             this->autoindexParser(it);
-        else if (*it == "allowed_methods")
+        if (*it == "allowed_methods")
             this->allowedParser(it);
-		else if (*it == "server_name")
+		if (*it == "server_name")
 			this->serverNameParser(it);
-		else if (*it == "client_max_body_size")
+		if (*it == "client_max_body_size")
 			this->clientmaxbodysizeParser(it);
-        else if (*it == "error_page")
+        if (*it == "error_page")
             this->errorpageParser(it);
-        else if (*it == "index")
+        if (*it == "index")
             this->indexParser(it);
-        else if (*it == "cgi")
+        if (*it == "cgi")
             this->cgiParser(it);
-        else if (*it == "root")
+        if (*it == "root" || *it == "alias")
             this->rootParser(it);
-        else if (*it == "location")
+        if (*it == "location")
             this->locationParser(it);
     }
     /*for (size_t i = 0; i < this->_tokens.size(); i++)
