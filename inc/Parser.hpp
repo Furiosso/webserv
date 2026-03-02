@@ -9,26 +9,32 @@
 # include <sstream>
 # include <iterator>
 # include <limits>
+# include <unistd.h>
 # include "utils.hpp"
 
 const std::string   configkeys[16] =
 {
     "listen", //done
     "server_name", // done
-    "error_page", // in progress dagimeno
+    "error_page", // done
     "client_max_body_size", // done
-    "root",
+    "root", // done
     "location",
     "index", //done
     "autoindex", // done
-    "cgi_path",
-    "cgi_ext",
     "return",
     "upload_store",
     "upload_pass",
-    "cgi_pass",
+    "cgi",
     "alias",
     "allowed_methods" // done
+};
+
+const std::string   cgikeys[3] =
+{
+    ".py",
+    ".php",
+    ".pl" 
 };
 
 enum    State
@@ -87,6 +93,9 @@ class Parser
         void                                clientmaxbodysizeParser(std::vector<std::string>::iterator& it);
         void                                serverNameParser(std::vector<std::string>::iterator& it);
         void                                errorpageParser(std::vector<std::string>::iterator& it);
+        void                                cgiParser(std::vector<std::string>::iterator& it);
+        void                                rootParser(std::vector<std::string>::iterator& it);
+        void                                locationParser(std::vector<std::string>::iterator& it);
         int		                            getServerNameState(int prev, int pos);
         bool                                checkclientmaxbodysize(std::string t);
         bool                                check_ipv4(std::string t);

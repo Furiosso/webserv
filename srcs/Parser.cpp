@@ -370,6 +370,8 @@ void	Parser::serverNameParser(std::vector<std::string>::iterator& it)
 			throw std::exception();
 			}
 		}
+        else
+            throw std::exception();
 		++it;
 	}
 }
@@ -483,8 +485,54 @@ void	Parser::indexParser(std::vector<std::string>::iterator& it)
 		chooseIndexState(str);
 		++it;
 	}
-	
+
 }
+
+int    isCgiWord(std::string& token)
+{
+    for (size_t i = 0; i < 15; i++)
+    {
+        if (token == cgikeys[i])
+            return 1;
+    }
+    return 0;
+}
+
+void	Parser::cgiParser(std::vector<std::string>::iterator& it)
+{
+	std::string			str;
+
+	++it;
+    str = *it;
+    if (*(it + 2) != ";" || !isCgiWord(str))
+        throw std::exception();
+    ++it;
+    if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
+        throw std::exception();
+}
+
+void    Parser::rootParser(std::vector<std::string>::iterator& it)
+{
+    if (*(it + 2) != ";")
+        throw std::exception();
+    ++it;
+    if (access((*it).c_str(), F_OK) != 0)
+        throw std::exception();
+}
+
+void    Parser::locationParser(std::vector<std::string>::iterator& it)
+{
+    ++it;
+    if (*it != "=" && access((*it).c_str(), F_OK) != 0)
+        throw std::exception();
+    ++it;
+    if (access((*it).c_str(), F_OK) != 0)
+        throw std::exception();
+    ++it;
+    if (*it != "{")
+        throw std::exception();
+}
+
 Parser::Parser(const char* in_file)
 {
 	std::ifstream   config_file(in_file);
@@ -517,6 +565,12 @@ Parser::Parser(const char* in_file)
             this->errorpageParser(it);
         else if (*it == "index")
             this->indexParser(it);
+        else if (*it == "cgi")
+            this->cgiParser(it);
+        else if (*it == "root")
+            this->rootParser(it);
+        else if (*it == "location")
+            this->locationParser(it);
     }
     /*for (size_t i = 0; i < this->_tokens.size(); i++)
        std::cout << this->_tokens[i] << std::endl;
