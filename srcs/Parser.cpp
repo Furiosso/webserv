@@ -208,7 +208,7 @@ bool   Parser::check_port(std::string t)
     return true;
 }
 
-void    Parser::listenParser(std::vector<std::string>::iterator& it)
+void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& server)
 {
     if (*(it + 2) != ";")
         throw std::exception();
@@ -285,7 +285,7 @@ bool    Parser::checkclientmaxbodysize(std::string t)
 }
 
 
-void    Parser::clientmaxbodysizeParser(std::vector<std::string>::iterator& it)
+void    Parser::clientmaxbodysizeParser(std::vector<std::string>::iterator& it,Server& server)
 {
     std::stringstream   parse;
     long long           n;
@@ -301,7 +301,7 @@ void    Parser::clientmaxbodysizeParser(std::vector<std::string>::iterator& it)
         throw std::exception();
 }
 
-void    Parser::autoindexParser(std::vector<std::string>::iterator& it)
+void    Parser::autoindexParser(std::vector<std::string>::iterator& it, Server& server)
 {
     if (*(it + 2) != ";")
         throw std::exception();
@@ -311,7 +311,7 @@ void    Parser::autoindexParser(std::vector<std::string>::iterator& it)
     ++it;
 }
 
-void	Parser::allowedParser(std::vector<std::string>::iterator& it)
+void	Parser::allowedParser(std::vector<std::string>::iterator& it, Server& server)
 {
 	++it;
 	while (*it != ";")
@@ -336,7 +336,7 @@ int		Parser::getServerNameState(int prev, int pos)
 	return (matrix[prev][pos]);
 }
 
-void	Parser::serverNameParser(std::vector<std::string>::iterator& it)
+void	Parser::serverNameParser(std::vector<std::string>::iterator& it,Server& server)
 {
 	std::string			str;
 	int					prev = 0;
@@ -413,7 +413,7 @@ int    Parser::getErrorPageParserState(int prev, int pos)
     return matrix[prev][pos];
 }
 
-void    Parser::errorpageParser(std::vector<std::string>::iterator& it)
+void    Parser::errorpageParser(std::vector<std::string>::iterator& it, Server& server)
 {
     int pos;
     int prev = 0;
@@ -483,7 +483,7 @@ void	Parser::chooseIndexState(std::string str)
 			throw std::exception();
 }
 
-void	Parser::indexParser(std::vector<std::string>::iterator& it)
+void	Parser::indexParser(std::vector<std::string>::iterator& it,Server& server)
 {
 	std::string			str;
 
@@ -493,6 +493,7 @@ void	Parser::indexParser(std::vector<std::string>::iterator& it)
 		str = *it;
 		//std::cout << str;
 		chooseIndexState(str);
+        server.addIndex(*it)
 		++it;
 	}
 
@@ -508,7 +509,7 @@ int    isCgiWord(std::string& token)
     return 0;
 }
 
-void	Parser::cgiParser(std::vector<std::string>::iterator& it)
+void	Parser::cgiParser(std::vector<std::string>::iterator& it, Server& server)
 {
 	std::string			str;
 
@@ -519,15 +520,17 @@ void	Parser::cgiParser(std::vector<std::string>::iterator& it)
     ++it;
     if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
         throw std::exception();
+    server.addCgi(*(it - 1), *it);
 }
 
-void    Parser::rootParser(std::vector<std::string>::iterator& it)
+void    Parser::rootParser(std::vector<std::string>::iterator& it, Server& server)
 {
     if (*(it + 2) != ";")
         throw std::exception();
     ++it;
     if (access((*it).c_str(), F_OK) != 0)
         throw std::exception();
+    server.setRoot(*it);
 }
 
 int Parser::getLocationState(int prev, int pos)
@@ -541,7 +544,7 @@ int Parser::getLocationState(int prev, int pos)
     return (matrix[prev][pos]);
 }
 
-void    Parser::locationParser(std::vector<std::string>::iterator& it)
+void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& server)
 {
     int prev = 0;
     int pos;
@@ -561,7 +564,7 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it)
     }
 }
 
-Parser::Parser(const char* in_file)
+Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCounter(0)
 {
 	std::ifstream   config_file(in_file);
     std::vector<std::string>::iterator  it;
@@ -576,29 +579,38 @@ Parser::Parser(const char* in_file)
         ;
     it = _tokens.begin();
     end = _tokens.end();
-
+    int i = 0;
+    while (i < _serverCounter)
+    {
+        Server  server;
+        servers.push_back(server);
+        ++i;
+    }
+    i = -1;
     for (; it != end; ++it)
     {
+        if (*it == "server")
+            ++i;
         if (*it == "listen")
-            this->listenParser(it);
+            this->listenParser(it, servers[i]);
         if (*it == "autoindex")
-            this->autoindexParser(it);
+            this->autoindexParser(it, servers[i]);
         if (*it == "allowed_methods")
-            this->allowedParser(it);
+            this->allowedParser(it, servers[i]);
 		if (*it == "server_name")
-			this->serverNameParser(it);
+			this->serverNameParser(it, servers[i]);
 		if (*it == "client_max_body_size")
-			this->clientmaxbodysizeParser(it);
+			this->clientmaxbodysizeParser(it, servers[i]);
         if (*it == "error_page")
-            this->errorpageParser(it);
+            this->errorpageParser(it, servers[i]);
         if (*it == "index")
-            this->indexParser(it);
+            this->indexParser(it, servers[i]);
         if (*it == "cgi")
-            this->cgiParser(it);
+            this->cgiParser(it, servers[i]);
         if (*it == "root" || *it == "alias")
-            this->rootParser(it);
+            this->rootParser(it, servers[i]);
         if (*it == "location")
-            this->locationParser(it);
+            this->locationParser(it, servers[i]);
     }
     /*for (size_t i = 0; i < this->_tokens.size(); i++)
        std::cout << this->_tokens[i] << std::endl;
@@ -659,6 +671,8 @@ void    Parser::tokenize()
                 if (!token.empty())
                 {
                     _tokens.push_back(token);
+                    if (token == "server")
+                        ++_serverCounter;
                     token.clear();
                 }
                 break;
@@ -674,3 +688,5 @@ void    Parser::tokenize()
         //cerrar el config_file y devolver error;
     }
 }
+
+std::vector<std::string>    Parser::get_tokens(){ return _tokens; }

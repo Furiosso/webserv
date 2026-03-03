@@ -1,0 +1,54 @@
+#ifndef SERVER_HPP
+# define SERVER_HPP
+
+# include <map>
+# include <string>
+# include <vector>
+
+struct LocationConfig
+{
+	std::string					path;
+	std::string					root;
+	std::vector<std::string>	index;
+	std::vector<std::string>	allowed_methods;
+	bool						autoindex;
+};
+
+
+struct ServerConfig
+{
+    std::map<std::string, std::string>	listen;
+    std::map<std::string, std::string>	cgi;
+    std::vector<std::string>			index;
+	bool								autoindex;
+	std::map<int, std::string>			error_pages;
+	std::string							root;
+	long								client_max_body_size;
+	std::vector<LocationConfig>			locations;
+	std::vector<std::string>			allowed_methods;
+};
+
+
+class Server
+{
+private:
+    //std::map<std::string, std::string>   _listen;
+    ServerConfig	_config;
+public:
+    Server();
+    ~Server();
+
+	void	addListen(std::string& ip, std::string& port);
+	void	addCgi(std::string& ext, std::string &path);
+	void	addIndex(std::string& name);
+	void	setAutoindex(bool aI);
+	void	setRoot(std::string& r);
+	void	setClientMaxBodySize(long cmbs);
+	void	addErrorPage(int code, std::string& uri);
+	void	addLocation(LocationConfig& loc);
+	void	setAllowedMethods(const std::vector<std::string>& m);
+
+	const	ServerConfig&	getConfig()const;
+};
+
+#endif

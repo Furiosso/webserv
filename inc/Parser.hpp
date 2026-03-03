@@ -11,6 +11,7 @@
 # include <limits>
 # include <unistd.h>
 # include "utils.hpp"
+# include "Server.hpp"
 
 const std::string   configkeys[16] =
 {
@@ -94,15 +95,16 @@ class Parser
         std::vector<std::string>            _tokens;
         std::map<std::string, std::string>  _listens;
         std::vector<int>                    _lflags;
-        void                                listenParser(std::vector<std::string>::iterator& it);
-        void                                autoindexParser(std::vector<std::string>::iterator& it);
-        void                                allowedParser(std::vector<std::string>::iterator& it);
-        void                                clientmaxbodysizeParser(std::vector<std::string>::iterator& it);
-        void                                serverNameParser(std::vector<std::string>::iterator& it);
-        void                                errorpageParser(std::vector<std::string>::iterator& it);
-        void                                cgiParser(std::vector<std::string>::iterator& it);
-        void                                rootParser(std::vector<std::string>::iterator& it);
-        void                                locationParser(std::vector<std::string>::iterator& it);
+        int                                 _serverCounter;
+        void                                listenParser(std::vector<std::string>::iterator& it, Server& server); //not
+        void                                autoindexParser(std::vector<std::string>::iterator& it, Server& server); //not
+        void                                allowedParser(std::vector<std::string>::iterator& it, Server& server); //not
+        void                                clientmaxbodysizeParser(std::vector<std::string>::iterator& it, Server& server); //no
+        void                                serverNameParser(std::vector<std::string>::iterator& it, Server& server); //not
+        void                                errorpageParser(std::vector<std::string>::iterator& it, Server& server); //not
+        void                                cgiParser(std::vector<std::string>::iterator& it, Server& server); // done
+        void                                rootParser(std::vector<std::string>::iterator& it, Server& server); // done
+        void                                locationParser(std::vector<std::string>::iterator& it, Server& server); //not
         int		                            getServerNameState(int prev, int pos);
         bool                                checkclientmaxbodysize(std::string t);
         bool                                check_ipv4(std::string t);
@@ -112,18 +114,19 @@ class Parser
         int                                 getClientMaxBodySizeState(int prev, int pos);
         int                                 getErrorPageParserState(int prev, int pos);
         int                                 getTypeOfItem(std::string& str);
-        void                                indexParser(std::vector<std::string>::iterator& it);
+        void                                indexParser(std::vector<std::string>::iterator& it, Server& server);// done
         void	                            chooseIndexState(std::string str);
         int                                 getIndexState(int prev, int pos);
         int                                 getLocationState(int prev, int pos);
 
     public:
-        Parser(const char* in_file);
+        Parser(const char* in_file, std::vector<Server>& servers);
         //Parser(const Parser& other);
         ~Parser();
         //Parser& operator=(const Parser& other);
-        void    tokenize();
+        void                        tokenize();
         void                        rmComments(std::ifstream& config_file);
+        std::vector<std::string>    get_tokens();
 };
 
 #endif

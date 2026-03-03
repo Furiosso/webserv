@@ -1,0 +1,63 @@
+#include "Server.hpp"
+
+Server::Server()
+{
+	_config.listen.insert(std::pair<std::string, std::string>("127.0.0.1", "80"));
+	_config.autoindex = false;
+	_config.allowed_methods.push_back("GET");
+	_config.allowed_methods.push_back("POST");
+	_config.allowed_methods.push_back("DELETE");
+}
+
+Server::~Server()
+{}
+
+void	Server::addListen(std::string& ip, std::string& port)
+{
+	_config.listen.insert(std::pair<std::string, std::string>(ip, port));
+}
+
+void	Server::addCgi(std::string& ext, std::string& path)
+{
+	_config.cgi.insert(std::pair<std::string, std::string>(ext, path));
+}
+
+void	Server::addIndex(std::string& name)
+{
+	_config.index.push_back(name);
+}
+
+void	Server::setAutoindex(bool aI)
+{
+	_config.autoindex = aI;
+}
+
+void	Server::setRoot(std::string& r)
+{
+	_config.root = r;
+}
+
+void	Server::setClientMaxBodySize(long cmbs)
+{
+	_config.client_max_body_size = cmbs;
+}
+
+void	Server::addErrorPage(int code, std::string& uri)
+{
+	_config.error_pages.insert(std::pair<int, std::string>(code, uri));
+}
+
+void	Server::addLocation(LocationConfig& loc)
+{
+	_config.locations.push_back(loc);
+}
+
+void	Server::setAllowedMethods(const std::vector<std::string>& m)
+{
+	_config.allowed_methods = m;
+}
+
+const ServerConfig&	Server::getConfig()const
+{
+	return _config;
+}

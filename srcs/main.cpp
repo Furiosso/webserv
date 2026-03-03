@@ -1,7 +1,10 @@
 #include "ServerSocket.hpp"
 #include <poll.h>
 #include <map>
+#include <vector>
+#include <string>
 #include "Parser.hpp"
+#include "Server.hpp"
 
 int main (int argc, char** argv, char** env)
 {
@@ -14,8 +17,10 @@ int main (int argc, char** argv, char** env)
         return 1;
     }
     try
-    {    
-        Parser parser(argv[1]);
+    {  
+        std::vector<Server>         servers;
+        Parser parser(argv[1], servers);
+        
         /*ServerSocket prueba("80");
         struct pollfd* fds;
         fds->fd = prueba.get_fd();
