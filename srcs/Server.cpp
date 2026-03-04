@@ -2,11 +2,12 @@
 
 Server::Server()
 {
-	_config.listen.insert(std::pair<std::string, std::string>("127.0.0.1", "80"));
+	//_config.listen.insert(std::pair<std::string, std::string>("127.0.0.1", "80"));
+	//si a la hora de transmitir la informacion a getaddrinfo listen.size es igual a 0 intorducir en ese momento los valores por defecto
 	_config.autoindex = false;
 	_config.allowed_methods.push_back("GET");
 	_config.allowed_methods.push_back("POST");
-	_config.allowed_methods.push_back("DELETE");
+	_config.allowed_methods.push_back("DELETE");	
 }
 
 Server::~Server()
@@ -35,6 +36,11 @@ void	Server::setAutoindex(bool aI)
 void	Server::setRoot(std::string& r)
 {
 	_config.root = r;
+}
+
+void	Server::setServerName(std::string& sn)
+{
+	_config.server_name = sn;
 }
 
 void	Server::setClientMaxBodySize(long cmbs)

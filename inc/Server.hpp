@@ -17,12 +17,13 @@ struct LocationConfig
 
 struct ServerConfig
 {
-    std::map<std::string, std::string>	listen;
+    std::multimap<std::string, std::string>	listen;
     std::map<std::string, std::string>	cgi;
     std::vector<std::string>			index;
 	bool								autoindex;
 	std::map<int, std::string>			error_pages;
 	std::string							root;
+	std::string							server_name;
 	long								client_max_body_size;
 	std::vector<LocationConfig>			locations;
 	std::vector<std::string>			allowed_methods;
@@ -43,6 +44,7 @@ public:
 	void	addIndex(std::string& name);
 	void	setAutoindex(bool aI);
 	void	setRoot(std::string& r);
+	void	setServerName(std::string& sn);
 	void	setClientMaxBodySize(long cmbs);
 	void	addErrorPage(int code, std::string& uri);
 	void	addLocation(LocationConfig& loc);

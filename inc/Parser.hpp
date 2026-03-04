@@ -10,6 +10,7 @@
 # include <iterator>
 # include <limits>
 # include <unistd.h>
+# include <cstdlib>
 # include "utils.hpp"
 # include "Server.hpp"
 
@@ -91,33 +92,34 @@ enum    locationState
 class Parser
 {
     private:
-        std::string                         _config_file;
-        std::vector<std::string>            _tokens;
-        std::map<std::string, std::string>  _listens;
-        std::vector<int>                    _lflags;
-        int                                 _serverCounter;
-        void                                listenParser(std::vector<std::string>::iterator& it, Server& server); //not
-        void                                autoindexParser(std::vector<std::string>::iterator& it, Server& server); //not
-        void                                allowedParser(std::vector<std::string>::iterator& it, Server& server); //not
-        void                                clientmaxbodysizeParser(std::vector<std::string>::iterator& it, Server& server); //no
-        void                                serverNameParser(std::vector<std::string>::iterator& it, Server& server); //not
-        void                                errorpageParser(std::vector<std::string>::iterator& it, Server& server); //not
-        void                                cgiParser(std::vector<std::string>::iterator& it, Server& server); // done
-        void                                rootParser(std::vector<std::string>::iterator& it, Server& server); // done
-        void                                locationParser(std::vector<std::string>::iterator& it, Server& server); //not
-        int		                            getServerNameState(int prev, int pos);
-        bool                                checkclientmaxbodysize(std::string t);
-        bool                                check_ipv4(std::string t);
-        bool                                check_port(std::string t);
-        int                                 chooseState(std::vector<std::string>& tokens);
-        int                                 getIPV4State(int prev, int pos);
-        int                                 getClientMaxBodySizeState(int prev, int pos);
-        int                                 getErrorPageParserState(int prev, int pos);
-        int                                 getTypeOfItem(std::string& str);
-        void                                indexParser(std::vector<std::string>::iterator& it, Server& server);// done
-        void	                            chooseIndexState(std::string str);
-        int                                 getIndexState(int prev, int pos);
-        int                                 getLocationState(int prev, int pos);
+        std::string                             _config_file;
+        std::vector<std::string>                _tokens;
+        std::multimap<std::string, std::string> _listens;
+        std::vector<int>                        _lflags;
+        int                                     _serverCounter;
+        void                                    listenParser(std::vector<std::string>::iterator& it, Server& server); //done
+        void                                    autoindexParser(std::vector<std::string>::iterator& it, Server& server); //done
+        void                                    allowedParser(std::vector<std::string>::iterator& it, Server& server); //done
+        void                                    clientmaxbodysizeParser(std::vector<std::string>::iterator& it, Server& server); //done
+        void                                    serverNameParser(std::vector<std::string>::iterator& it, Server& server); //done
+        void                                    errorpageParser(std::vector<std::string>::iterator& it, Server& server); //done
+        void                                    cgiParser(std::vector<std::string>::iterator& it, Server& server); // done
+        void                                    rootParser(std::vector<std::string>::iterator& it, Server& server); // done
+        void                                    rootLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
+        void                                    locationParser(std::vector<std::string>::iterator& it, Server& server); //not
+        int		                                getServerNameState(int prev, int pos);
+        bool                                    checkclientmaxbodysize(std::string t);
+        bool                                    check_ipv4(std::string t);
+        bool                                    check_port(std::string t);
+        int                                     chooseState(std::vector<std::string>& tokens);
+        int                                     getIPV4State(int prev, int pos);
+        int                                     getClientMaxBodySizeState(int prev, int pos);
+        int                                     getErrorPageParserState(int prev, int pos);
+        int                                     getTypeOfItem(std::string& str);
+        void                                    indexParser(std::vector<std::string>::iterator& it, Server& server);// done
+        void	                                chooseIndexState(std::string str);
+        int                                     getIndexState(int prev, int pos);
+        int                                     getLocationState(int prev, int pos);
 
     public:
         Parser(const char* in_file, std::vector<Server>& servers);

@@ -213,7 +213,14 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
     if (*(it + 2) != ";")
         throw std::exception();
     ++it;
+    std::cout << "Listen incial\n";
+    for (std::map<std::string, std::string>::const_iterator it2 = server.getConfig().listen.begin();
+         it2 != server.getConfig().listen.end(); ++it2)
+    {
+        std::cout << it2->first << " => " << it2->second << std::endl;
+    }
     std::string t = *it;
+    std::cout << t << " " << *it << std::endl;
     size_t  pos = t.find(':');
     if (pos != std::string::npos)
     {
@@ -226,11 +233,14 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
             ip = "127.0.0.1";
         ++it;
         _listens.insert(std::pair<std::string, std::string>(ip, port));
+		server.addListen(ip, port);
+        std::cout << "Entra aqui\n";
     }
     else
     {    
-        bool    ip = false;
-        bool    port = false;
+        bool    	ip = false;
+        bool    	port = false;
+		std::string	ipPort;
             
         ip = check_ipv4(t);
         port = check_port(t);
@@ -238,17 +248,40 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
         {
             if (t == "localhost")
                 t = "127.0.0.1";
-            _listens.insert(std::pair<std::string, std::string>(t, "80"));
+			std::cout << t << "\n";
+			ipPort = "80";
+			server.addListen(t, ipPort);
             ++it;
+            std::cout << "Listen final\n";
+			for (std::map<std::string, std::string>::const_iterator it2 = server.getConfig().listen.begin();
+         		it2 != server.getConfig().listen.end(); ++it2)
+    		{
+      			std::cout << it2->first << " => " << it2->second << std::endl << std::endl;
+    		}
             return ;
         }
         if (port)
         {
-            _listens.insert(std::pair<std::string, std::string>("127.0.0.1", t));
+            std::cout << "Entra en el puerto\n";
+			ipPort = "127.0.0.1";
+			server.addListen(ipPort, t);
+			std::cout << t << "\n";
             ++it;
+            std::cout << "Listen final\n";
+			for (std::map<std::string, std::string>::const_iterator it2 = server.getConfig().listen.begin();
+         		it2 != server.getConfig().listen.end(); ++it2)
+    		{
+       			std::cout << it2->first << " => " << it2->second << std::endl << std::endl;
+    		}
             return ;
         }
         throw std::exception();
+    }
+    std::cout << "Listen final\n";
+    for (std::map<std::string, std::string>::const_iterator it2 = server.getConfig().listen.begin();
+        it2 != server.getConfig().listen.end(); ++it2)
+    {
+        std::cout << it2->first << " => " << it2->second << std::endl << std::endl;
     }
 }
 
@@ -299,6 +332,7 @@ void    Parser::clientmaxbodysizeParser(std::vector<std::string>::iterator& it,S
     parse >> n;
     if (n < 0 || n > std::numeric_limits<int>::max())
         throw std::exception();
+    server.setClientMaxBodySize(n);
 }
 
 void    Parser::autoindexParser(std::vector<std::string>::iterator& it, Server& server)
@@ -308,18 +342,30 @@ void    Parser::autoindexParser(std::vector<std::string>::iterator& it, Server& 
     ++it;
     if (*it != "on" && *it != "off")
         throw std::exception();
+    if (*it == "on")
+        server.setAutoindex(true);
+    else
+        server.setAutoindex(false);
     ++it;
 }
 
 void	Parser::allowedParser(std::vector<std::string>::iterator& it, Server& server)
 {
+    std::vector<std::string>    methods;
+
 	++it;
 	while (*it != ";")
 	{
-		if (*it != "GET" || *it != "POST" || *it != "DELETE")
+		if (*it != "GET" && *it != "POST" && *it != "DELETE")
+        {
+            std::cout << *it << std::endl;
 			throw std::exception();
+        }
+        else
+            methods.push_back(*it);
 		++it;
 	}
+    server.setAllowedMethods(methods);
 }
 
 int		Parser::getServerNameState(int prev, int pos)
@@ -384,6 +430,7 @@ void	Parser::serverNameParser(std::vector<std::string>::iterator& it,Server& ser
             throw std::exception();
 		++it;
 	}
+    server.setServerName(*it);
 }
 
 int     Parser::getTypeOfItem(std::string& str)
@@ -417,6 +464,7 @@ void    Parser::errorpageParser(std::vector<std::string>::iterator& it, Server& 
 {
     int pos;
     int prev = 0;
+	std::string	ovr;
 
     ++it;
     while (*it != ";")
@@ -425,10 +473,24 @@ void    Parser::errorpageParser(std::vector<std::string>::iterator& it, Server& 
         prev = getErrorPageParserState(prev, pos);
         if (prev == 0)
             throw std::exception();
+		if (prev == 1)
+			ovr = *it;
+		if (prev == 2)
+		{
+			ovr = *it;
+			ovr = ovr.substr(1, ovr.length());
+		}
         ++it;
     }
     if (getTypeOfItem(*(it - 1)) != 3)
         throw std::exception();
+	else
+		server.addErrorPage(std::atoi(ovr.c_str()), *(it - 1));
+	/*for (std::map<int, std::string>::const_iterator it = server.getConfig().error_pages.begin();
+         it != server.getConfig().error_pages.end(); ++it)
+    {
+        std::cout << it->first << " => " << it->second << std::endl << std::endl;
+    }*/
 }
 
 int		Parser::getIndexState(int prev, int pos)
@@ -493,7 +555,7 @@ void	Parser::indexParser(std::vector<std::string>::iterator& it,Server& server)
 		str = *it;
 		//std::cout << str;
 		chooseIndexState(str);
-        server.addIndex(*it)
+        server.addIndex(*it);
 		++it;
 	}
 
@@ -533,6 +595,16 @@ void    Parser::rootParser(std::vector<std::string>::iterator& it, Server& serve
     server.setRoot(*it);
 }
 
+void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
+{
+    if (*(it + 2) != ";")
+        throw std::exception();
+    ++it;
+    if (access((*it).c_str(), F_OK) != 0)
+        throw std::exception();
+    loc.root = *it;
+}
+
 int Parser::getLocationState(int prev, int pos)
 {
     static int matrix[][3] = {
@@ -548,11 +620,12 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
 {
     int prev = 0;
     int pos;
+	LocationConfig	loc;
 
     ++it;
     while (*it != "{")
     {
-        std::cout << *it << "\n";
+        //std::cout << *it << "\n";
         if (*it == "=")
             pos = 1;
         else
@@ -562,6 +635,14 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
             throw std::exception();
         ++it;
     }
+	while (*it != "}")
+	{
+		if (*it == "root")
+			rootLocParser(it, loc);
+		else if (*it == "index")
+			;
+	}
+	
 }
 
 Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCounter(0)
@@ -592,7 +673,10 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
         if (*it == "server")
             ++i;
         if (*it == "listen")
+        {
+            //std::cout << server[i].get_config()->first << " => " << it->second << std::endl << std::endl;
             this->listenParser(it, servers[i]);
+        }
         if (*it == "autoindex")
             this->autoindexParser(it, servers[i]);
         if (*it == "allowed_methods")
