@@ -105,7 +105,10 @@ class Parser
         void                                    errorpageParser(std::vector<std::string>::iterator& it, Server& server); //done
         void                                    cgiParser(std::vector<std::string>::iterator& it, Server& server); // done
         void                                    rootParser(std::vector<std::string>::iterator& it, Server& server); // done
-        void                                    rootLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
+        void                                    rootLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc, int i);
+        void	                                indexLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
+        void                                    cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
+		void									autoindexLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
         void                                    locationParser(std::vector<std::string>::iterator& it, Server& server); //not
         int		                                getServerNameState(int prev, int pos);
         bool                                    checkclientmaxbodysize(std::string t);
@@ -120,6 +123,7 @@ class Parser
         void	                                chooseIndexState(std::string str);
         int                                     getIndexState(int prev, int pos);
         int                                     getLocationState(int prev, int pos);
+        void                                    checkListen(std::vector<Server>& servers);
 
     public:
         Parser(const char* in_file, std::vector<Server>& servers);

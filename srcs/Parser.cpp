@@ -595,14 +595,61 @@ void    Parser::rootParser(std::vector<std::string>::iterator& it, Server& serve
     server.setRoot(*it);
 }
 
-void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
+void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc, int i)
 {
     if (*(it + 2) != ";")
         throw std::exception();
     ++it;
     if (access((*it).c_str(), F_OK) != 0)
         throw std::exception();
-    loc.root = *it;
+    if (i == 0)
+		loc.root = *it;
+	else
+		loc.alias = *it;
+}
+
+void	Parser::indexLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
+{
+	std::string			str;
+
+	++it;
+	while (*it != ";")
+	{
+		str = *it;
+		//std::cout << str;
+		chooseIndexState(str);
+        loc.index.push_back(*it);
+		++it;
+	}
+
+}
+
+void	Parser::cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
+{
+	std::string			str;
+
+	++it;
+    str = *it;
+    if (*(it + 2) != ";" || !isCgiWord(str))
+        throw std::exception();
+    ++it;
+    if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
+        throw std::exception();
+	loc.cgi.insert(*(it - 1), *it);
+}
+
+void    Parser::autoindexLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
+{
+    if (*(it + 2) != ";")
+        throw std::exception();
+    ++it;
+    if (*it != "on" && *it != "off")
+        throw std::exception();
+    if (*it == "on")
+        loc.autoindex = true;
+    else
+        loc.autoindex = false;
+    ++it;
 }
 
 int Parser::getLocationState(int prev, int pos)
@@ -635,14 +682,35 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
             throw std::exception();
         ++it;
     }
+	loc.path = *(it - 1);
 	while (*it != "}")
 	{
 		if (*it == "root")
-			rootLocParser(it, loc);
+			rootLocParser(it, loc, 0);
 		else if (*it == "index")
-			;
+			indexLocParser(it, loc);
+        else if (*it == "cgi")
+			cgiLocParser(it, loc);
+		else if (*it == "autoindex")
+			autoindexLocParser(it, loc);
+		else if (*it == "alias")
+			rootLocParser(it, loc, 1);
+		++it;
 	}
 	
+}
+
+void    Parser::checkListen(std::vector<Server>& servers)
+{
+    std::vector<Server>::iterator   it = servers.begin();
+    std::vector<Server>::iterator   end = servers.end();
+
+    ++it;
+    while (it != end)
+    {
+        std::multimap<std::string, std::string>::iterator lit = it->getConfig().listen.begin();
+        std::multimap<std::string, std::string>::iterator lend = it->getConfig().listen.end();
+        }
 }
 
 Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCounter(0)
@@ -673,10 +741,7 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
         if (*it == "server")
             ++i;
         if (*it == "listen")
-        {
-            //std::cout << server[i].get_config()->first << " => " << it->second << std::endl << std::endl;
             this->listenParser(it, servers[i]);
-        }
         if (*it == "autoindex")
             this->autoindexParser(it, servers[i]);
         if (*it == "allowed_methods")

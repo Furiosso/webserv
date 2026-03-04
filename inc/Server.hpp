@@ -7,26 +7,28 @@
 
 struct LocationConfig
 {
-	std::string					path;
-	std::string					root;
-	std::vector<std::string>	index;
-	std::vector<std::string>	allowed_methods;
-	bool						autoindex;
+	std::string							path;
+	std::string							root;
+	std::string							alias;
+	std::vector<std::string>			index;
+	std::vector<std::string>			allowed_methods;
+    std::map<std::string, std::string>	cgi;
+	bool								autoindex;
 };
 
 
 struct ServerConfig
 {
     std::multimap<std::string, std::string>	listen;
-    std::map<std::string, std::string>	cgi;
-    std::vector<std::string>			index;
-	bool								autoindex;
-	std::map<int, std::string>			error_pages;
-	std::string							root;
-	std::string							server_name;
-	long								client_max_body_size;
-	std::vector<LocationConfig>			locations;
-	std::vector<std::string>			allowed_methods;
+    std::map<std::string, std::string>		cgi;
+    std::vector<std::string>				index;
+	bool									autoindex;
+	std::map<int, std::string>				error_pages;
+	std::string								root;
+	std::string								server_name;
+	long									client_max_body_size;
+	std::vector<LocationConfig>				locations;
+	std::vector<std::string>				allowed_methods;
 };
 
 
