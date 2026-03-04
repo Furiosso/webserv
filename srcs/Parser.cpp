@@ -214,11 +214,6 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
         throw std::exception();
     ++it;
     std::cout << "Listen incial\n";
-    for (std::map<std::string, std::string>::const_iterator it2 = server.getConfig().listen.begin();
-         it2 != server.getConfig().listen.end(); ++it2)
-    {
-        std::cout << it2->first << " => " << it2->second << std::endl;
-    }
     std::string t = *it;
     std::cout << t << " " << *it << std::endl;
     size_t  pos = t.find(':');
@@ -252,12 +247,6 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
 			ipPort = "80";
 			server.addListen(t, ipPort);
             ++it;
-            std::cout << "Listen final\n";
-			for (std::map<std::string, std::string>::const_iterator it2 = server.getConfig().listen.begin();
-         		it2 != server.getConfig().listen.end(); ++it2)
-    		{
-      			std::cout << it2->first << " => " << it2->second << std::endl << std::endl;
-    		}
             return ;
         }
         if (port)
@@ -267,21 +256,9 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
 			server.addListen(ipPort, t);
 			std::cout << t << "\n";
             ++it;
-            std::cout << "Listen final\n";
-			for (std::map<std::string, std::string>::const_iterator it2 = server.getConfig().listen.begin();
-         		it2 != server.getConfig().listen.end(); ++it2)
-    		{
-       			std::cout << it2->first << " => " << it2->second << std::endl << std::endl;
-    		}
             return ;
         }
         throw std::exception();
-    }
-    std::cout << "Listen final\n";
-    for (std::map<std::string, std::string>::const_iterator it2 = server.getConfig().listen.begin();
-        it2 != server.getConfig().listen.end(); ++it2)
-    {
-        std::cout << it2->first << " => " << it2->second << std::endl << std::endl;
     }
 }
 
@@ -626,6 +603,7 @@ void	Parser::indexLocParser(std::vector<std::string>::iterator& it, LocationConf
 
 void	Parser::cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
 {
+    (void)loc;
 	std::string			str;
 
 	++it;
@@ -635,7 +613,7 @@ void	Parser::cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig
     ++it;
     if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
         throw std::exception();
-	loc.cgi.insert(*(it - 1), *it);
+	//loc.cgi.insert(*(it - 1), *it);
 }
 
 void    Parser::autoindexLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
@@ -665,6 +643,7 @@ int Parser::getLocationState(int prev, int pos)
 
 void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& server)
 {
+    (void)server;
     int prev = 0;
     int pos;
 	LocationConfig	loc;
@@ -702,15 +681,24 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
 
 void    Parser::checkListen(std::vector<Server>& servers)
 {
-    std::vector<Server>::iterator   it = servers.begin();
-    std::vector<Server>::iterator   end = servers.end();
+    std::set<std::pair<std::string, std::string> >      listens;
+    std::vector<Server>::iterator                       it = servers.begin();
+    std::vector<Server>::iterator                       end = servers.end();
 
-    ++it;
     while (it != end)
     {
-        std::multimap<std::string, std::string>::iterator lit = it->getConfig().listen.begin();
-        std::multimap<std::string, std::string>::iterator lend = it->getConfig().listen.end();
+        std::multimap<std::string, std::string>::const_iterator lit = it->getConfig().listen.begin();
+        std::multimap<std::string, std::string>::const_iterator lend = it->getConfig().listen.end();
+        while (lit != lend)
+        {
+            std::pair<std::string, std::string> iport = std::make_pair(lit->first, lit->second);
+            if (listens.find(iport) != listens.end())
+                throw std::exception();
+            listens.insert(iport);
+            ++lit;
         }
+        ++it;
+    }
 }
 
 Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCounter(0)
@@ -761,6 +749,7 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
         if (*it == "location")
             this->locationParser(it, servers[i]);
     }
+    checkListen(servers);
     /*for (size_t i = 0; i < this->_tokens.size(); i++)
        std::cout << this->_tokens[i] << std::endl;
     for (size_t i = 0; i < this->_config_file.size(); i++)
