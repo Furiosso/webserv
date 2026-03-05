@@ -407,7 +407,7 @@ void	Parser::serverNameParser(std::vector<std::string>::iterator& it,Server& ser
             throw std::exception();
 		++it;
 	}
-    server.setServerName(*it);
+    server.setServerName(*(it - 1));
 }
 
 int     Parser::getTypeOfItem(std::string& str)
@@ -560,11 +560,12 @@ void	Parser::cgiParser(std::vector<std::string>::iterator& it, Server& server)
     if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
         throw std::exception();
     server.addCgi(*(it - 1), *it);
+	++it;
 }
 
 void    Parser::rootParser(std::vector<std::string>::iterator& it, Server& server)
 {
-    if (*(it + 2) != ";")
+    if (*(it + 2) != ";" || server.getConfig().isRootOrAlias == true)
         throw std::exception();
     ++it;
     if (access((*it).c_str(), F_OK) != 0)
@@ -583,6 +584,7 @@ void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationCo
 		loc.root = *it;
 	else
 		loc.alias = *it;
+	++it;
 }
 
 void	Parser::indexLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
@@ -603,7 +605,6 @@ void	Parser::indexLocParser(std::vector<std::string>::iterator& it, LocationConf
 
 void	Parser::cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
 {
-    (void)loc;
 	std::string			str;
 
 	++it;
@@ -613,7 +614,9 @@ void	Parser::cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig
     ++it;
     if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
         throw std::exception();
-	//loc.cgi.insert(*(it - 1), *it);
+	else
+		loc.cgi.insert(std::pair<std::string, std::string>(*(it - 1), *it));
+	++it;
 }
 
 void    Parser::autoindexLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
@@ -630,6 +633,58 @@ void    Parser::autoindexLocParser(std::vector<std::string>::iterator& it, Locat
     ++it;
 }
 
+void	Parser::allowedLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
+{
+    std::vector<std::string>    methods;
+
+	++it;
+	while (*it != ";")
+	{
+		if (*it != "GET" && *it != "POST" && *it != "DELETE")
+        {
+            std::cout << *it << std::endl;
+			throw std::exception();
+        }
+        else
+            methods.push_back(*it);
+		++it;
+	}
+    loc.allowed_methods = methods;
+}
+
+void    Parser::errorPageLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
+{
+    int pos;
+    int prev = 0;
+	std::string	ovr;
+
+    ++it;
+    while (*it != ";")
+    {
+        pos = getTypeOfItem(*it);
+        prev = getErrorPageParserState(prev, pos);
+        if (prev == 0)
+            throw std::exception();
+		if (prev == 1)
+			ovr = *it;
+		if (prev == 2)
+		{
+			ovr = *it;
+			ovr = ovr.substr(1, ovr.length());
+		}
+        ++it;
+    }
+    if (getTypeOfItem(*(it - 1)) != 3)
+        throw std::exception();
+	else
+		loc.error_pages.insert(std::pair<int, std::string>(std::atoi(ovr.c_str()), *(it - 1)));
+	/*for (std::map<int, std::string>::const_iterator it = server.getConfig().error_pages.begin();
+         it != server.getConfig().error_pages.end(); ++it)
+    {
+        std::cout << it->first << " => " << it->second << std::endl << std::endl;
+    }*/
+}
+
 int Parser::getLocationState(int prev, int pos)
 {
     static int matrix[][3] = {
@@ -643,7 +698,6 @@ int Parser::getLocationState(int prev, int pos)
 
 void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& server)
 {
-    (void)server;
     int prev = 0;
     int pos;
 	LocationConfig	loc;
@@ -662,6 +716,7 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
         ++it;
     }
 	loc.path = *(it - 1);
+	++it;
 	while (*it != "}")
 	{
 		if (*it == "root")
@@ -674,16 +729,56 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
 			autoindexLocParser(it, loc);
 		else if (*it == "alias")
 			rootLocParser(it, loc, 1);
-		++it;
+		else if (*it == "allowed_methods")
+			allowedLocParser(it, loc);
+		else if (*it == "error_page")
+			errorPageLocParser(it, loc);
+		else if (*it == ";")
+			++it;
+		else
+		{
+			std::cout << "aqui *it: " << *it << std::endl;
+			throw std::exception();
+		}
 	}
-	
+	server.addLocation(loc);
+	//std::cout << server.getConfig().locations. << "\n";
+	if (!server.getConfig().locations.empty())
+    {
+        const LocationConfig& s_loc = server.getConfig().locations.back();
+        std::cout << "Location stored in server:\n";
+        std::cout << "  path: " << s_loc.path << "\n";
+        std::cout << "  root: " << s_loc.root << "\n";
+        std::cout << "  alias: " << s_loc.alias << "\n";
+        std::cout << "  autoindex: " << (s_loc.autoindex ? "on" : "off") << "\n";
+
+        std::cout << "  index:";
+        for (std::vector<std::string>::const_iterator i = s_loc.index.begin(); i != s_loc.index.end(); ++i)
+            std::cout << " " << *i;
+        std::cout << "\n";
+
+        std::cout << "  allowed_methods:";
+        for (std::vector<std::string>::const_iterator m = s_loc.allowed_methods.begin(); m != s_loc.allowed_methods.end(); ++m)
+            std::cout << " " << *m;
+        std::cout << "\n";
+
+        std::cout << "  cgi:\n";
+        for (std::map<std::string, std::string>::const_iterator c = s_loc.cgi.begin(); c != s_loc.cgi.end(); ++c)
+            std::cout << "    " << c->first << " => " << c->second << "\n";
+
+        std::cout << "  error_pages:\n";
+        for (std::map<int, std::string>::const_iterator e = s_loc.error_pages.begin(); e != s_loc.error_pages.end(); ++e)
+            std::cout << "    " << e->first << " => " << e->second << "\n";
+    }
+    else
+        std::cout << "No location stored in server\n";
 }
 
 void    Parser::checkListen(std::vector<Server>& servers)
 {
-    std::set<std::pair<std::string, std::string> >      listens;
-    std::vector<Server>::iterator                       it = servers.begin();
-    std::vector<Server>::iterator                       end = servers.end();
+    std::set<std::pair<std::string, std::string> >  listens;
+    std::vector<Server>::iterator                   it = servers.begin();
+    std::vector<Server>::iterator                   end = servers.end();
 
     while (it != end)
     {

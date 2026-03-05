@@ -7,11 +7,11 @@ Server::Server()
 	_config.autoindex = false;
 	_config.allowed_methods.push_back("GET");
 	_config.allowed_methods.push_back("POST");
-	_config.allowed_methods.push_back("DELETE");	
+	_config.allowed_methods.push_back("DELETE");
+	_config.isRootOrAlias = false;
 }
 
-Server::~Server()
-{}
+Server::~Server(){}
 
 void	Server::addListen(std::string& ip, std::string& port)
 {
@@ -36,6 +36,7 @@ void	Server::setAutoindex(bool aI)
 void	Server::setRoot(std::string& r)
 {
 	_config.root = r;
+	_config.isRootOrAlias = true;
 }
 
 void	Server::setServerName(std::string& sn)

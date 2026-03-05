@@ -110,6 +110,8 @@ class Parser
         void	                                indexLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
         void                                    cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
 		void									autoindexLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
+		void									allowedLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
+		void									errorPageLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
         void                                    locationParser(std::vector<std::string>::iterator& it, Server& server); //not
         int		                                getServerNameState(int prev, int pos);
         bool                                    checkclientmaxbodysize(std::string t);
