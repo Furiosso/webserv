@@ -13,21 +13,29 @@
 # include <iostream>
 # include <fcntl.h>
 # include <fstream>
+# include <arpa/inet.h>
+# include <set>
 # include "utils.hpp"
+# include "Server.hpp"
 
 class ServerSocket
 {
     private:
-        int                 _fd;
+        //int                 _fd;
+        std::vector<int>                                _listeners;
+        std::vector<struct pollfd>                      _pollfds;
+        std::set< std::pair<std::string, std::string> > _created; //ver utilidad (comprobacion de duplicados ip:port)
         //std::string         _host;
         //const char*         _port;
         //struct sockaddr_in  _addr; //bind()
         //struct addrinfo     _addr; // crear sockets |||||| bind(sockfd, res->aiddr, res->ai_addrlen)
         
     public:
+        ServerSocket();
         ServerSocket(const char* port);
         ~ServerSocket();
         int get_fd();
+        bool createListeners(const std::vector<Server>& servers);
 };
 
 #endif

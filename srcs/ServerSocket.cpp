@@ -13,7 +13,7 @@ ServerSocket::ServerSocket(const char* port)
 	ret = getaddrinfo(NULL, port, &hints, &res);
 	if (ret != 0)
 		std::cerr << gai_strerror(ret);
-	for(p = res; p != NULL; p = p->ai_next)
+	/*for(p = res; p != NULL; p = p->ai_next)
 	{
 		_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
    		if (_fd != -1)
@@ -39,9 +39,67 @@ ServerSocket::ServerSocket(const char* port)
 	}
 	freeaddrinfo(res);
 	if (_fd == -1)
-		std::runtime_error("Not valid address found\n");
+		std::runtime_error("Not valid address found\n");*/
 }
 
-int	ServerSocket::get_fd(){ return _fd; }
+/*int	ServerSocket::get_fd(){ return _fd; }*/
 
 ServerSocket::~ServerSocket() {}
+
+ServerSocket::ServerSocket()
+{}
+
+bool	ServerSocket::createListeners(const std::vector<Server>& servers)
+{
+	int	on = 1;
+	for (std::vector<Server>::size_type i = 0; i < servers.size(); i++)
+	{
+		/* code */
+		const ServerConfig& cfg = servers[i].getConfig();
+		for (std::multimap<std::string, std::string>::const_iterator it = cfg.listen.begin(); it != cfg.listen.end(); ++it)
+		{
+			std::string ip = it->first;
+			std::string	port = it->second;
+			std::pair<std::string, std::string> key(ip, port);
+			if (_created.find(key) != _created.end())
+				continue;
+			struct addrinfo		hints;
+			struct addrinfo*	res = NULL;
+			ft_bzero(&hints, sizeof(hints));
+			hints.ai_family = AF_UNSPEC;
+			hints.ai_socktype = SOCK_STREAM;
+			hints.ai_flags = AI_PASSIVE;
+			int	gai = getaddrinfo(ip.c_str(), port.c_str(), &hints, &res);
+			if (gai != 0)
+			{
+				std::cerr << "getaddrinfo: " << gai_strerror(gai) << " for " <<
+					ip << ":" << port << "\n";
+				continue;
+			}
+			struct addrinfo* rp = res;
+			int	listen_fd = -1;
+			for (; rp != NULL; rp = rp->ai_next)
+			{
+				listen_fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+				if (listen_fd < 0)
+					continue;
+				if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0)
+				{
+					close(listen_fd);
+					listen_fd = -1;
+					continue;
+				}
+				int	flags = fcntl(listen_fd, F_GETFL, 0);
+				if (flags == -1)
+					flags = 0;
+				if (fcntl(listen_fd, F_SETFL, flags | O_NONBLOCK) == -1)
+				{
+					close(listen_fd);
+					listen_fd = -1;
+					continue;
+				}
+			}
+		}
+	}
+	
+}

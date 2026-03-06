@@ -9,6 +9,7 @@ Server::Server()
 	_config.allowed_methods.push_back("POST");
 	_config.allowed_methods.push_back("DELETE");
 	_config.isRootOrAlias = false;
+	_config.client_max_body_size = 1048576;
 }
 
 Server::~Server(){}
@@ -37,6 +38,11 @@ void	Server::setRoot(std::string& r)
 {
 	_config.root = r;
 	_config.isRootOrAlias = true;
+	/*if (!_config.locations.empty())
+    {
+        LocationConfig& s_loc = _config.locations.back();
+        s_loc.isRootOrAlias = true;
+    }*/
 }
 
 void	Server::setServerName(std::string& sn)
@@ -44,8 +50,14 @@ void	Server::setServerName(std::string& sn)
 	_config.server_name = sn;
 }
 
-void	Server::setClientMaxBodySize(long cmbs)
+void	Server::setClientMaxBodySize(long cmbs, char c)
 {
+	if (c == 'K' || c == 'k')
+		cmbs *= 1024;
+	if (c == 'M' || c == 'm')
+		cmbs *= 1048576;
+	if (c == 'G' || c == 'g')
+		cmbs *= 1073741824;
 	_config.client_max_body_size = cmbs;
 }
 

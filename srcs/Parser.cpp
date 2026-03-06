@@ -213,9 +213,7 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
     if (*(it + 2) != ";")
         throw std::exception();
     ++it;
-    std::cout << "Listen incial\n";
     std::string t = *it;
-    std::cout << t << " " << *it << std::endl;
     size_t  pos = t.find(':');
     if (pos != std::string::npos)
     {
@@ -229,7 +227,6 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
         ++it;
         _listens.insert(std::pair<std::string, std::string>(ip, port));
 		server.addListen(ip, port);
-        std::cout << "Entra aqui\n";
     }
     else
     {    
@@ -243,7 +240,6 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
         {
             if (t == "localhost")
                 t = "127.0.0.1";
-			std::cout << t << "\n";
 			ipPort = "80";
 			server.addListen(t, ipPort);
             ++it;
@@ -251,10 +247,8 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
         }
         if (port)
         {
-            std::cout << "Entra en el puerto\n";
 			ipPort = "127.0.0.1";
 			server.addListen(ipPort, t);
-			std::cout << t << "\n";
             ++it;
             return ;
         }
@@ -299,6 +293,7 @@ void    Parser::clientmaxbodysizeParser(std::vector<std::string>::iterator& it,S
 {
     std::stringstream   parse;
     long long           n;
+    char                c;
 
     if (*(it + 2) != ";")
         throw std::exception();
@@ -307,9 +302,10 @@ void    Parser::clientmaxbodysizeParser(std::vector<std::string>::iterator& it,S
         throw std::exception();
     parse << *it;
     parse >> n;
+    parse >> c;
     if (n < 0 || n > std::numeric_limits<int>::max())
         throw std::exception();
-    server.setClientMaxBodySize(n);
+    server.setClientMaxBodySize(n, c);
 }
 
 void    Parser::autoindexParser(std::vector<std::string>::iterator& it, Server& server)
@@ -334,10 +330,7 @@ void	Parser::allowedParser(std::vector<std::string>::iterator& it, Server& serve
 	while (*it != ";")
 	{
 		if (*it != "GET" && *it != "POST" && *it != "DELETE")
-        {
-            std::cout << *it << std::endl;
 			throw std::exception();
-        }
         else
             methods.push_back(*it);
 		++it;
@@ -391,17 +384,11 @@ void	Parser::serverNameParser(std::vector<std::string>::iterator& it,Server& ser
 					pos = 6;
 				prev = getServerNameState(prev, pos);
 				if (prev == 1)
-				{
-					std::cout << "servernameparser1\n";
 					throw std::exception();
-				}
 				i++;
 			}
 			if (prev != 6)
-			{
-				std::cout << "servernameparser1\n";
-			throw std::exception();
-			}
+			    throw std::exception();
 		}
         else
             throw std::exception();
@@ -568,8 +555,10 @@ void    Parser::rootParser(std::vector<std::string>::iterator& it, Server& serve
     if (*(it + 2) != ";" || server.getConfig().isRootOrAlias == true)
         throw std::exception();
     ++it;
-    if (access((*it).c_str(), F_OK) != 0)
-        throw std::exception();
+    //if (access((*it).c_str(), F_OK) != 0)
+    //{
+    //    throw std::exception();
+    //}
     server.setRoot(*it);
 }
 
@@ -578,12 +567,20 @@ void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationCo
     if (*(it + 2) != ";")
         throw std::exception();
     ++it;
-    if (access((*it).c_str(), F_OK) != 0)
-        throw std::exception();
-    if (i == 0)
+    if (i == 0 && loc.isRootOrAlias == false)
+    {
 		loc.root = *it;
-	else
-		loc.alias = *it;
+        loc.isRootOrAlias = true;
+    }
+	else if (i == 1 && loc.isRootOrAlias == false)
+    {
+    	loc.alias = *it;
+        loc.isRootOrAlias = true;
+    }
+    else
+    {
+        throw std::exception();
+    }
 	++it;
 }
 
@@ -641,10 +638,7 @@ void	Parser::allowedLocParser(std::vector<std::string>::iterator& it, LocationCo
 	while (*it != ";")
 	{
 		if (*it != "GET" && *it != "POST" && *it != "DELETE")
-        {
-            std::cout << *it << std::endl;
 			throw std::exception();
-        }
         else
             methods.push_back(*it);
 		++it;
@@ -717,6 +711,7 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
     }
 	loc.path = *(it - 1);
 	++it;
+    loc.isRootOrAlias = false;
 	while (*it != "}")
 	{
 		if (*it == "root")
@@ -736,14 +731,10 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
 		else if (*it == ";")
 			++it;
 		else
-		{
-			std::cout << "aqui *it: " << *it << std::endl;
 			throw std::exception();
-		}
-	}
+    }
 	server.addLocation(loc);
-	//std::cout << server.getConfig().locations. << "\n";
-	if (!server.getConfig().locations.empty())
+	/*if (!server.getConfig().locations.empty())
     {
         const LocationConfig& s_loc = server.getConfig().locations.back();
         std::cout << "Location stored in server:\n";
@@ -771,7 +762,7 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
             std::cout << "    " << e->first << " => " << e->second << "\n";
     }
     else
-        std::cout << "No location stored in server\n";
+        std::cout << "No location stored in server\n";*/
 }
 
 void    Parser::checkListen(std::vector<Server>& servers)

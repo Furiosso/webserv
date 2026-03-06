@@ -51,7 +51,7 @@ public:
 	void	setAutoindex(bool aI);
 	void	setRoot(std::string& r);
 	void	setServerName(std::string& sn);
-	void	setClientMaxBodySize(long cmbs);
+	void	setClientMaxBodySize(long cmbs, char c);
 	void	addErrorPage(int code, std::string& uri);
 	void	addLocation(LocationConfig& loc);
 	void	setAllowedMethods(const std::vector<std::string>& m);
