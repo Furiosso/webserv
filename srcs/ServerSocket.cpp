@@ -1,6 +1,6 @@
 #include "ServerSocket.hpp"
 
-ServerSocket::ServerSocket(const char* port)
+/*ServerSocket::ServerSocket(const char* port)
 {
 	struct addrinfo	hints, *res, *p;
 	int				ret;
@@ -13,7 +13,7 @@ ServerSocket::ServerSocket(const char* port)
 	ret = getaddrinfo(NULL, port, &hints, &res);
 	if (ret != 0)
 		std::cerr << gai_strerror(ret);
-	/*for(p = res; p != NULL; p = p->ai_next)
+	for(p = res; p != NULL; p = p->ai_next)
 	{
 		_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
    		if (_fd != -1)
@@ -39,9 +39,9 @@ ServerSocket::ServerSocket(const char* port)
 	}
 	freeaddrinfo(res);
 	if (_fd == -1)
-		std::runtime_error("Not valid address found\n");*/
+		std::runtime_error("Not valid address found\n");
 }
-
+*/
 /*int	ServerSocket::get_fd(){ return _fd; }*/
 
 ServerSocket::~ServerSocket() {}
@@ -49,9 +49,16 @@ ServerSocket::~ServerSocket() {}
 ServerSocket::ServerSocket()
 {}
 
+static void	restartListenFd(int& listen_fd)
+{
+	close(listen_fd);
+	listen_fd = -1;
+}
+
 bool	ServerSocket::createListeners(const std::vector<Server>& servers)
 {
-	int	on = 1;
+	int		on = 1;
+	bool	any = false;
 	for (std::vector<Server>::size_type i = 0; i < servers.size(); i++)
 	{
 		/* code */
@@ -82,11 +89,12 @@ bool	ServerSocket::createListeners(const std::vector<Server>& servers)
 			{
 				listen_fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
 				if (listen_fd < 0)
+				{
 					continue;
+				}
 				if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0)
 				{
-					close(listen_fd);
-					listen_fd = -1;
+					restartListenFd(listen_fd);
 					continue;
 				}
 				int	flags = fcntl(listen_fd, F_GETFL, 0);
@@ -94,12 +102,37 @@ bool	ServerSocket::createListeners(const std::vector<Server>& servers)
 					flags = 0;
 				if (fcntl(listen_fd, F_SETFL, flags | O_NONBLOCK) == -1)
 				{
-					close(listen_fd);
-					listen_fd = -1;
+					restartListenFd(listen_fd);
 					continue;
 				}
+				if (bind(listen_fd, rp->ai_addr, rp->ai_addrlen) < 0)
+				{
+					//perror("bind");
+					restartListenFd(listen_fd);
+					continue;
+				}
+				if (listen(listen_fd, SOMAXCONN) < 0)
+				{
+					restartListenFd(listen_fd);
+					continue;
+				}
+				break;
 			}
+			freeaddrinfo(res);
+			if (listen_fd < 0)
+			{
+				std::cerr << "No se pudo crear listener: " << ip << ":" << port << "\n";
+				continue;
+			}
+			_listeners.push_back(listen_fd);
+			struct pollfd p;
+			p.events = POLLIN;
+			p.revents = 0;
+			_pollfds.push_back(p);
+			_created.insert(key);
+			any = true;
+			std::cout << "Listening on " << ip << ":" << port << " fd=" << listen_fd << "\n";
 		}
 	}
-	
+	return any;
 }

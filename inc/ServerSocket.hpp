@@ -2,6 +2,7 @@
 # define SERVERSOCKET_HPP
 
 # include <sys/socket.h>
+# include <sys/poll.h>
 # include <netinet/in.h>
 # include <sys/types.h>
 # include <netdb.h>
@@ -32,7 +33,7 @@ class ServerSocket
         
     public:
         ServerSocket();
-        ServerSocket(const char* port);
+       // ServerSocket(const char* port);
         ~ServerSocket();
         int get_fd();
         bool createListeners(const std::vector<Server>& servers);
