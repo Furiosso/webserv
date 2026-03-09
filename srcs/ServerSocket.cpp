@@ -61,7 +61,6 @@ bool	ServerSocket::createListeners(const std::vector<Server>& servers)
 	bool	any = false;
 	for (std::vector<Server>::size_type i = 0; i < servers.size(); i++)
 	{
-		/* code */
 		const ServerConfig& cfg = servers[i].getConfig();
 		for (std::multimap<std::string, std::string>::const_iterator it = cfg.listen.begin(); it != cfg.listen.end(); ++it)
 		{
@@ -126,6 +125,7 @@ bool	ServerSocket::createListeners(const std::vector<Server>& servers)
 			}
 			_listeners.push_back(listen_fd);
 			struct pollfd p;
+			p.fd = listen_fd;
 			p.events = POLLIN;
 			p.revents = 0;
 			_pollfds.push_back(p);
@@ -134,5 +134,61 @@ bool	ServerSocket::createListeners(const std::vector<Server>& servers)
 			std::cout << "Listening on " << ip << ":" << port << " fd=" << listen_fd << "\n";
 		}
 	}
-	return any;
+	return any;	
+}
+
+int	ServerSocket::acceptNewClient(int listen_fd)
+{
+	struct sockaddr_storage	peer;
+	socklen_t				plen = sizeof(peer);
+	int						client_fd = accept(listen_fd, (struct sockaddr*)&peer, &plen);
+	if (client_fd < 0)
+	{
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return -1;
+		std::cerr << "accept error: " << strerror(errno) << std::endl;
+		return -1;
+	}
+	int	flags = fcntl(client_fd, F_GETFL, 0);
+	if (flags == -1)
+	{
+		std::cerr << "fcntl F_GETFL: " << strerror(errno) << std::endl;
+		flags = 0;
+	}
+	if (fcntl(client_fd, F_SETFL, flags | O_NONBLOCK) == -1)
+	{
+		std::cerr << "fcntl F_SETFL: " << strerror(errno) << std::endl;
+		close(client_fd);
+		return -1;
+	}
+	return client_fd;
+}
+
+const std::vector<int>&	ServerSocket::getListeners() const
+{
+	return _listeners;
+}
+
+const std::vector<struct pollfd>& ServerSocket::getPollfds() const
+{
+	return _pollfds;
+}
+
+void	ServerSocket::closeAll()
+{
+	for (std::vector<int>::size_type i = 0; i < _listeners.size(); ++i)
+		close(_listeners[i]);
+	_listeners.clear();
+	_pollfds.clear();
+	_created.clear();
+}
+
+bool	ServerSocket::isListener(int fd)
+{
+	for (size_t i = 0; i < _listeners.size(); ++i)
+	{
+		if (_listeners[i] == fd)
+			return true;
+	}
+	return false;
 }

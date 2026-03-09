@@ -99,7 +99,54 @@ int main (int argc, char** argv, char** env)
         ServerSocket sockman;
         if (!sockman.createListeners(servers))
         {
-
+            std::cerr << "No listeners created\n";
+            return 1;
+        }
+        std::vector<struct pollfd> pollfds = sockman.getPollfds();
+        while (1)
+        {
+            nfds_t  nfds = static_cast<nfds_t>(pollfds.size());
+		    int ret = poll(pollfds.data(), nfds, -1);
+            if (ret < 0)
+            {
+                std::cerr << "Poll not ready: " << strerror(errno) << "\n";
+                break;
+            }
+            for(std::vector<struct pollfd>::size_type i = 0; i < pollfds.size(); ++i)
+            {
+				if (!(pollfds[i].revents & POLLIN) && !(pollfds[i].revents & POLLOUT))
+				{
+					close(pollfds[i].fd);
+					std::swap(pollfds[i], pollfds.back());
+					pollfds.pop_back();
+					continue;
+				}
+				if(pollfds[i].revents & POLLIN)
+				{
+                    int fd = pollfds[i].fd;
+                    bool    is_listen = sockman.isListener(fd);
+					if (is_listen)
+                    {
+                        int client_fd = sockman.acceptNewClient(fd);
+                        if (client_fd > 0)
+                        {
+                            struct pollfd newp;
+                            newp.fd = client_fd;
+                            newp.events = POLLIN;
+                            newp.revents = 0;
+                            pollfds.push_back(newp);
+                        }
+                    }
+					else
+					{
+						manageRequest(pollfds[i].fd);
+					}
+				}
+				if (pollfds[i].revents & POLLOUT)
+				{
+					sendResponse(pollfds[i].fd);
+				}
+            }
         }
         /*for (size_t i = 0; i < )
         {}*/

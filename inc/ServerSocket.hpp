@@ -35,8 +35,13 @@ class ServerSocket
         ServerSocket();
        // ServerSocket(const char* port);
         ~ServerSocket();
-        int get_fd();
-        bool createListeners(const std::vector<Server>& servers);
+        int                                 get_fd();
+        const std::vector<int>&             getListeners() const;
+        bool                                isListener(int fd);
+        bool                                createListeners(const std::vector<Server>& servers);
+        int                                 acceptNewClient(int listen_fd);
+        const std::vector<struct pollfd>&   getPollfds() const;
+        void                                closeAll();
 };
 
 #endif
