@@ -55,7 +55,7 @@ static void	restartListenFd(int& listen_fd)
 	listen_fd = -1;
 }
 
-bool	ServerSocket::createListeners(const std::vector<Server>& servers)
+bool	ServerSocket::createListeners(std::vector<Server>& servers)
 {
 	int		on = 1;
 	bool	any = false;
@@ -115,6 +115,7 @@ bool	ServerSocket::createListeners(const std::vector<Server>& servers)
 					restartListenFd(listen_fd);
 					continue;
 				}
+				servers[i].setFd(listen_fd);
 				break;
 			}
 			freeaddrinfo(res);

@@ -80,3 +80,13 @@ const ServerConfig&	Server::getConfig()const
 {
 	return _config;
 }
+
+void	Server::setFd(int fd)
+{
+	_fd = fd;
+}
+
+int		Server::getFd() const
+{
+	return _fd;
+}

@@ -5,6 +5,7 @@
 #include <string>
 #include "Parser.hpp"
 #include "Server.hpp"
+#include "RequestHandler.hpp"
 
 
 //AUXILIAR PARA PRINTEO DE SERVER
@@ -103,6 +104,7 @@ int main (int argc, char** argv, char** env)
             return 1;
         }
         std::vector<struct pollfd> pollfds = sockman.getPollfds();
+		std::vector<RequestHandler> clients;
         while (1)
         {
             nfds_t  nfds = static_cast<nfds_t>(pollfds.size());
@@ -135,16 +137,25 @@ int main (int argc, char** argv, char** env)
                             newp.events = POLLIN;
                             newp.revents = 0;
                             pollfds.push_back(newp);
+							for (size_t j = 0; j < servers.size(); ++j)
+							{
+								if (servers[j].getFd() == fd)
+								{
+									RequestHandler client(servers[j], client_fd);
+									clients.push_back(client);
+									break;
+								}
+							}
                         }
                     }
 					else
 					{
-						manageRequest(pollfds[i].fd);
+						//manageRequest(pollfds[i].fd);
 					}
 				}
 				if (pollfds[i].revents & POLLOUT)
 				{
-					sendResponse(pollfds[i].fd);
+					//sendResponse(pollfds[i].fd);
 				}
             }
         }

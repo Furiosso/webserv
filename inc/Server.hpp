@@ -41,6 +41,7 @@ class Server
 private:
     //std::map<std::string, std::string>   _listen;
     ServerConfig	_config;
+	int				_fd;
 public:
     Server();
     ~Server();
@@ -55,6 +56,8 @@ public:
 	void	addErrorPage(int code, std::string& uri);
 	void	addLocation(LocationConfig& loc);
 	void	setAllowedMethods(const std::vector<std::string>& m);
+	void	setFd(int fd);
+	int		getFd() const;
 
 	const	ServerConfig&	getConfig()const;
 };
