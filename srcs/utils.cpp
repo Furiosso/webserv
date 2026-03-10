@@ -54,3 +54,23 @@ bool    strIsDigit(std::string str)
     }
     return  true;
 }
+
+size_t	wordCounter(std::string& line, char splitter)
+{
+	std::string::iterator	it = line.begin();
+	std::string::iterator	end = line.end();
+	size_t					n;
+
+	n = 0;
+	for (; it != end; ++it)
+	{
+		while (*it == splitter && it != end)
+			++it;
+		while (*it != splitter &&  it != end)
+			++it;
+		while (*it == splitter &&  it != end)
+			++it;
+		++n;
+	}
+	return n;
+}
