@@ -38,11 +38,6 @@ void	Server::setRoot(std::string& r)
 {
 	_config.root = r;
 	_config.isRootOrAlias = true;
-	/*if (!_config.locations.empty())
-    {
-        LocationConfig& s_loc = _config.locations.back();
-        s_loc.isRootOrAlias = true;
-    }*/
 }
 
 void	Server::setServerName(std::string& sn)

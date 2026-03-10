@@ -29,7 +29,7 @@ struct ServerConfig
 	std::string								root;
 	std::string								alias;
 	std::string								server_name;
-	long									client_max_body_size;
+	size_t									client_max_body_size;
 	std::vector<LocationConfig>				locations;
 	std::vector<std::string>				allowed_methods;
 	bool									isRootOrAlias;

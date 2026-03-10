@@ -84,11 +84,9 @@ int     Parser::chooseState(std::vector<std::string>& tokens)
                 pos = 5;
             }
         }
-        //std::cout << "prev:" << prev << " pos: " << pos << " tokens[i]: " << tokens[i] << "\n";
         prev = getState(prev, pos);
         if (prev == 1)
         {
-            std::cout << "prev:" << prev << " pos: " << pos << " tokens[i]: " << tokens[i] << "\n";
             std::cerr << "Syntax error\n";
             return 1;
         }
@@ -109,7 +107,7 @@ void    Parser::rmComments(std::ifstream& config_file)
             size_t  pos = line.find('#');
             if (pos != std::string::npos)
                 line = line.substr(0, pos);
-            std::string cleanLine = rtrim(line); //desarrollar eliminar espacios
+            std::string cleanLine = rtrim(line);
             if (!cleanLine.empty())
                 this->_config_file += cleanLine + " ";
         }
@@ -450,11 +448,6 @@ void    Parser::errorpageParser(std::vector<std::string>::iterator& it, Server& 
         throw std::exception();
 	else
 		server.addErrorPage(std::atoi(ovr.c_str()), *(it - 1));
-	/*for (std::map<int, std::string>::const_iterator it = server.getConfig().error_pages.begin();
-         it != server.getConfig().error_pages.end(); ++it)
-    {
-        std::cout << it->first << " => " << it->second << std::endl << std::endl;
-    }*/
 }
 
 int		Parser::getIndexState(int prev, int pos)
@@ -517,7 +510,6 @@ void	Parser::indexParser(std::vector<std::string>::iterator& it,Server& server)
 	while (*it != ";")
 	{
 		str = *it;
-		//std::cout << str;
 		chooseIndexState(str);
         server.addIndex(*it);
 		++it;
@@ -592,7 +584,6 @@ void	Parser::indexLocParser(std::vector<std::string>::iterator& it, LocationConf
 	while (*it != ";")
 	{
 		str = *it;
-		//std::cout << str;
 		chooseIndexState(str);
         loc.index.push_back(*it);
 		++it;
@@ -672,11 +663,6 @@ void    Parser::errorPageLocParser(std::vector<std::string>::iterator& it, Locat
         throw std::exception();
 	else
 		loc.error_pages.insert(std::pair<int, std::string>(std::atoi(ovr.c_str()), *(it - 1)));
-	/*for (std::map<int, std::string>::const_iterator it = server.getConfig().error_pages.begin();
-         it != server.getConfig().error_pages.end(); ++it)
-    {
-        std::cout << it->first << " => " << it->second << std::endl << std::endl;
-    }*/
 }
 
 int Parser::getLocationState(int prev, int pos)
@@ -699,7 +685,6 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
     ++it;
     while (*it != "{")
     {
-        //std::cout << *it << "\n";
         if (*it == "=")
             pos = 1;
         else
@@ -734,35 +719,6 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
 			throw std::exception();
     }
 	server.addLocation(loc);
-	/*if (!server.getConfig().locations.empty())
-    {
-        const LocationConfig& s_loc = server.getConfig().locations.back();
-        std::cout << "Location stored in server:\n";
-        std::cout << "  path: " << s_loc.path << "\n";
-        std::cout << "  root: " << s_loc.root << "\n";
-        std::cout << "  alias: " << s_loc.alias << "\n";
-        std::cout << "  autoindex: " << (s_loc.autoindex ? "on" : "off") << "\n";
-
-        std::cout << "  index:";
-        for (std::vector<std::string>::const_iterator i = s_loc.index.begin(); i != s_loc.index.end(); ++i)
-            std::cout << " " << *i;
-        std::cout << "\n";
-
-        std::cout << "  allowed_methods:";
-        for (std::vector<std::string>::const_iterator m = s_loc.allowed_methods.begin(); m != s_loc.allowed_methods.end(); ++m)
-            std::cout << " " << *m;
-        std::cout << "\n";
-
-        std::cout << "  cgi:\n";
-        for (std::map<std::string, std::string>::const_iterator c = s_loc.cgi.begin(); c != s_loc.cgi.end(); ++c)
-            std::cout << "    " << c->first << " => " << c->second << "\n";
-
-        std::cout << "  error_pages:\n";
-        for (std::map<int, std::string>::const_iterator e = s_loc.error_pages.begin(); e != s_loc.error_pages.end(); ++e)
-            std::cout << "    " << e->first << " => " << e->second << "\n";
-    }
-    else
-        std::cout << "No location stored in server\n";*/
 }
 
 void    Parser::checkListen(std::vector<Server>& servers)
@@ -795,7 +751,6 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
 
     if (!config_file.is_open())
         throw std::runtime_error("Could not open config file\n");
-    //tokenizar y parsear
     this->rmComments(config_file);
     this->tokenize();
     if (this->chooseState(this->_tokens))
@@ -836,11 +791,6 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
             this->locationParser(it, servers[i]);
     }
     checkListen(servers);
-    /*for (size_t i = 0; i < this->_tokens.size(); i++)
-       std::cout << this->_tokens[i] << std::endl;
-    for (size_t i = 0; i < this->_config_file.size(); i++)
-       std::cout << this->_config_file[i];*/
-       
     config_file.close();
 }
 

@@ -20,12 +20,11 @@ static void printVector(const std::vector<std::string>& v)
 
 int main (int argc, char** argv, char** env)
 {
-    (void)argv;
     (void)env;
 
     if (argc != 2)
     {
-        // include error message here
+        std::cerr << "Invalid arguments\n";
         return 1;
     }
     try
@@ -155,47 +154,22 @@ int main (int argc, char** argv, char** env)
 				}
 				if (pollfds[i].revents & POLLOUT)
 				{
-					//sendResponse(pollfds[i].fd);
+					for (size_t j = 0; j < clients.size(); ++j)
+					{
+						if (clients[j].getClientFd() == pollfds[i].fd)
+						{
+							//sendResponse(pollfds[i].fd);
+							break;
+						}
+					}
 				}
             }
         }
-        /*for (size_t i = 0; i < )
-        {}*/
-        /*ServerSocket prueba("80");
-        struct pollfd* fds;
-        fds->fd = prueba.get_fd();
-        fds->events = POLLIN;
-        int nfds = 1;*/
     }
     catch (const std::exception& e)
     {
         std::cout << e.what() << std::endl;
     }
-    /*while (true)
-    {
-        if (poll(fds, 1, -1))
-        {
-            for (int i = 0; i < nfds; ++i)
-            {
-                if (fds[i].revents & POLLIN)
-                {
-                    if (fds[i].fd == prueba.get_fd())
-                    {
-                        int client_fd = accept(fds->fd, NULL, NULL);
-                        fds[nfds].fd = client_fd;
-                        fds[nfds].events = POLLIN;
-                        ++nfds;
-                    }
-                    else{
-                        char    buffer[4096];
-                        ssize_t n = recv(fds[i].fd, buffer, sizeof(buffer), 0);
-                        if (n <= 0)
-                            close(fds[i].fd);
-                    }               
-                }
-            }
-        }
-    }*/
 }
 
 
