@@ -6,7 +6,7 @@ INC			= inc/
 SRCS_DIR	= srcs/
 CFILES		= main.cpp \
 		 	ServerSocket.cpp \
-			utils.cpp Parser.cpp Server.cpp
+			utils.cpp Parser.cpp Server.cpp RequestHandler.cpp
 
 
 ODIR = build

@@ -133,7 +133,7 @@ class Parser
         //Parser(const Parser& other);
         ~Parser();
         //Parser& operator=(const Parser& other);
-        void                        tokenize();
+        int                        tokenize();
         void                        rmComments(std::ifstream& config_file);
         std::vector<std::string>    get_tokens();
 };

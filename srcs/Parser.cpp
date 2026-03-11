@@ -569,6 +569,7 @@ void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationCo
     }
     else
     {
+        std::cerr << "Hola\n";
         throw std::exception();
     }
 	++it;
@@ -694,8 +695,8 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
     }
 	loc.path = *(it - 1);
 	++it;
-    //loc.isRoot = false;
-    //loc.isAlias = false;
+    loc.isRoot = false;
+    loc.isAlias = false;
 	while (*it != "}")
 	{
 		if (*it == "root")
@@ -751,7 +752,11 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
     if (!config_file.is_open())
         throw std::runtime_error("Could not open config file\n");
     this->rmComments(config_file);
-    this->tokenize();
+    if (this->tokenize() == 1)
+    {
+        config_file.close();
+        throw std::exception();
+    }
     if (this->chooseState(this->_tokens))
         ;
     it = _tokens.begin();
@@ -802,7 +807,7 @@ Parser::~Parser()
     _lflags.clear();
 }
 
-void    Parser::tokenize()
+int    Parser::tokenize()
 {
     std::string token;
     int         curly_braces = 0;
@@ -819,8 +824,9 @@ void    Parser::tokenize()
                 }
                 _tokens.push_back("{");
                 ++curly_braces;
-                //if (curly_braces > 2)
-                    // cerrar  config_file y devolver error o excepcion
+                if (curly_braces > 2)
+                    return 1;
+                    //throw std::exception();// cerrar  config_file y devolver error o excepcion
                 break ;
             case '}':
                 if (!token.empty())
@@ -859,9 +865,7 @@ void    Parser::tokenize()
     if (!token.empty())
         _tokens.push_back(token);
     if (curly_braces != 0)
-    {
-        //cerrar el config_file y devolver error;
-    }
+        return 1;
 }
 
 std::vector<std::string>    Parser::get_tokens(){ return _tokens; }
