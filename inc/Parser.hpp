@@ -105,7 +105,7 @@ class Parser
         void                                    serverNameParser(std::vector<std::string>::iterator& it, Server& server); //done
         void                                    errorpageParser(std::vector<std::string>::iterator& it, Server& server); //done
         void                                    cgiParser(std::vector<std::string>::iterator& it, Server& server); // done
-        void                                    rootParser(std::vector<std::string>::iterator& it, Server& server); // done
+        void                                    rootParser(std::vector<std::string>::iterator& it, Server& server, int n); // done
         void                                    rootLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc, int i);
         void	                                indexLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
         void                                    cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);

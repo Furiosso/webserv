@@ -542,16 +542,16 @@ void	Parser::cgiParser(std::vector<std::string>::iterator& it, Server& server)
 	++it;
 }
 
-void    Parser::rootParser(std::vector<std::string>::iterator& it, Server& server)
+void    Parser::rootParser(std::vector<std::string>::iterator& it, Server& server, int n)
 {
-    if (*(it + 2) != ";" || server.getConfig().isRootOrAlias == true)
+    if (*(it + 2) != ";" || server.getConfig().isRoot == true || server.getConfig().isAlias == true)
         throw std::exception();
     ++it;
     //if (access((*it).c_str(), F_OK) != 0)
     //{
     //    throw std::exception();
     //}
-    server.setRoot(*it);
+    server.setRoot(*it, n);
 }
 
 void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc, int i)
@@ -559,15 +559,13 @@ void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationCo
     if (*(it + 2) != ";")
         throw std::exception();
     ++it;
-    if (i == 0 && loc.isRootOrAlias == false)
+    if (loc.isRoot == false || loc.isAlias == false)
     {
 		loc.root = *it;
-        loc.isRootOrAlias = true;
-    }
-	else if (i == 1 && loc.isRootOrAlias == false)
-    {
-    	loc.alias = *it;
-        loc.isRootOrAlias = true;
+        if (i == 0)
+            loc.isRoot = true;
+        if (i == 1)
+            loc.isAlias = true;
     }
     else
     {
@@ -696,7 +694,8 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
     }
 	loc.path = *(it - 1);
 	++it;
-    loc.isRootOrAlias = false;
+    //loc.isRoot = false;
+    //loc.isAlias = false;
 	while (*it != "}")
 	{
 		if (*it == "root")
@@ -785,8 +784,10 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
             this->indexParser(it, servers[i]);
         if (*it == "cgi")
             this->cgiParser(it, servers[i]);
-        if (*it == "root" || *it == "alias")
-            this->rootParser(it, servers[i]);
+        if (*it == "root")
+            this->rootParser(it, servers[i], 0);
+        if (*it == "alias")
+            this->rootParser(it, servers[i], 1);
         if (*it == "location")
             this->locationParser(it, servers[i]);
     }

@@ -1,6 +1,9 @@
 #include "RequestHandler.hpp"
 
-RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), _fd(fd), _error(0), _body("") {}
+RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), _fd(fd), _error(0), _body("")
+{
+	_headerContent.isChunked = false;
+}
 
 RequestHandler::~RequestHandler() {}
 
@@ -34,6 +37,7 @@ void RequestHandler::chargeHeader(int fd, size_t maxBodySize)
 			size_t headerEnd = this->_header.find("\r\n\r\n");
 			this->_header = this->_header.substr(0, headerEnd);
 			this->parseHeader();
+			this->setPath();
 			this->_request[0] = this->_header.substr(0, this->_header.find("\r\n")); // Request line
 			if (headerEnd + 4 < this->_header.size())
 				this->_body = this->_header.substr(headerEnd + 4);
@@ -55,7 +59,7 @@ void RequestHandler::parseHeader()
 	this->_header = this->_header.substr(headerEnd + 2, this->_header.size()); //this->_header = this->_header.substr(headerEnd + 2);
 	if (wordCounter(line, ' ') != 3)
 	{
-		std::cerr << "Bad header\n";
+		this->_error = 400;
 		return ;
 	}
 	std::string::iterator	begin = line.begin();
@@ -95,6 +99,7 @@ void RequestHandler::parseHeader()
 		this->_error = 505;
 		return ;
 	}
+	this->_headerContent.protocol = token;
 	while (*begin == ' ')
 		++begin;
 	begin += 2;
@@ -118,15 +123,54 @@ void RequestHandler::parseHeader()
 					break ;
 				case ':':
 					if (!token.empty())
+					{
 						tokens.push_back(token);
+						token = "";
+					}
 					tokens.push_back(":");
-					token = "";
 					break ;
 				default:
 					token.push_back(*begin);
 					token = "";
 			}
+			++begin;
 		}
 		this->_header = this->_header.substr(this->_header.find("\r\n"), this->_header.size());
 	}
+	std::vector<std::string>::iterator	vegin = tokens.begin();
+	std::vector<std::string>::iterator	vend = tokens.end();
+	std::stringstream					ss;
+	size_t								num;
+	for (; vegin != vend; ++vegin)
+	{
+		if ((vegin + 1) != vend && (vegin + 2) != vend && strToLower(*vegin) == "content-lenght")
+		{
+			if (this->_headerContent.isChunked == true)
+			{
+				this->_error = 404;
+				return ;
+			}
+			if (*(vegin + 1) == ":")
+			{
+				ss << *(vegin + 2);
+				ss >> num;
+				this->_headerContent.contentLenght = num;
+			}
+		}
+		if ((vegin + 1) != vend && (vegin + 2) != vend && strToLower(*vegin) == "transfer-encoding")
+		{
+			if (this->_headerContent.contentLenght == 0)
+			{
+				this->_error = 404;
+				return ;
+			}
+			if (*(vegin + 1) == ":" && *(vegin + 2) == "chunked")
+				this->_headerContent.isChunked = true;
+		}
+	}
+}
+
+void	RequestHandler::setPath()
+{
+	
 }

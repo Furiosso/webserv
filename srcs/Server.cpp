@@ -8,7 +8,9 @@ Server::Server()
 	_config.allowed_methods.push_back("GET");
 	_config.allowed_methods.push_back("POST");
 	_config.allowed_methods.push_back("DELETE");
-	_config.isRootOrAlias = false;
+	//_config.isRootOrAlias = false;
+	_config.isRoot = false;
+	_config.isAlias = false;
 	_config.client_max_body_size = 1048576;
 }
 
@@ -34,10 +36,13 @@ void	Server::setAutoindex(bool aI)
 	_config.autoindex = aI;
 }
 
-void	Server::setRoot(std::string& r)
+void	Server::setRoot(std::string& r, int n)
 {
 	_config.root = r;
-	_config.isRootOrAlias = true;
+	if (n == 0)
+		_config.isRoot = true;
+	if (n == 1)
+		_config.isAlias = true;
 }
 
 void	Server::setServerName(std::string& sn)

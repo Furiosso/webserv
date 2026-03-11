@@ -9,13 +9,15 @@ struct LocationConfig
 {
 	std::string							path;
 	std::string							root;
-	std::string							alias;
+	//std::string							alias;
 	std::vector<std::string>			index;
 	std::vector<std::string>			allowed_methods;
     std::map<std::string, std::string>	cgi;
 	std::map<int, std::string>			error_pages;
 	bool								autoindex;
-	bool								isRootOrAlias;
+	//bool								isRootOrAlias;
+	bool								isRoot;
+	bool								isAlias;
 };
 
 
@@ -27,12 +29,14 @@ struct ServerConfig
 	bool									autoindex;
 	std::map<int, std::string>				error_pages;
 	std::string								root;
-	std::string								alias;
+	//std::string								alias;
 	std::string								server_name;
 	size_t									client_max_body_size;
 	std::vector<LocationConfig>				locations;
 	std::vector<std::string>				allowed_methods;
-	bool									isRootOrAlias;
+	bool									isRoot;
+	bool									isAlias;
+	//bool									isRootOrAlias; // if true
 };
 
 
@@ -50,7 +54,7 @@ public:
 	void	addCgi(std::string& ext, std::string &path);
 	void	addIndex(std::string& name);
 	void	setAutoindex(bool aI);
-	void	setRoot(std::string& r);
+	void	setRoot(std::string& r, int n);
 	void	setServerName(std::string& sn);
 	void	setClientMaxBodySize(long cmbs, char c);
 	void	addErrorPage(int code, std::string& uri);

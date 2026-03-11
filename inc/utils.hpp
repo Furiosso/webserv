@@ -12,5 +12,6 @@ std::string rtrim(std::string& line);
 std::string trim(std::string& line);
 bool        strIsDigit(std::string str);
 size_t		wordCounter(std::string& line, char splitter);
+std::string strToLower(std::string& s);
 
 #endif

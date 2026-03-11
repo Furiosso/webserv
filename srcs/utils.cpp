@@ -74,3 +74,13 @@ size_t	wordCounter(std::string& line, char splitter)
 	}
 	return n;
 }
+
+std::string strToLower(std::string& s)
+{
+    std::string             ret;
+    std::string::iterator   it = s.begin();
+    std::string::iterator   end = s.end();
+    for (; it != end; ++it)
+        ret.push_back(std::tolower(*it));
+    return ret;
+}

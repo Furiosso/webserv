@@ -3,6 +3,7 @@
 
 # include "ServerSocket.hpp"
 # include <algorithm>
+# include <sstream>
 
 struct HeaderContent
 {
@@ -10,6 +11,7 @@ struct HeaderContent
 	size_t		contentLenght;
 	bool		isChunked;
 	std::string path;
+	std::string	protocol;
 };
 
 class RequestHandler
@@ -30,6 +32,7 @@ public:
 	void	parseHeader();
 	void	setClientFd(int fd);
 	int		getClientFd() const;
+	void	setPath();
 };
 
 
