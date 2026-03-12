@@ -9,6 +9,7 @@ Server::Server()
 	_config.allowed_methods.push_back("POST");
 	_config.allowed_methods.push_back("DELETE");
 	//_config.isRootOrAlias = false;
+	_config.root = "";
 	_config.isRoot = false;
 	_config.isAlias = false;
 	_config.client_max_body_size = 1048576;

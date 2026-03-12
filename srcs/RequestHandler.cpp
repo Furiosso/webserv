@@ -87,7 +87,6 @@ void RequestHandler::parseHeader()
 			break;
 		token.push_back(*begin);
 	}
-	//comprobar que el path exista
 	this->_headerContent.path = token;
 	token = "";
 	while (*begin == ' ')
@@ -107,7 +106,10 @@ void RequestHandler::parseHeader()
 	{
 		line = this->_header.substr(0, this->_header.find("\r\n")); 
 		if (wordCounter(line, ':') != 2)
-			//return error;
+		{
+			this->_error = 400;
+			return ;
+		}
 		begin = line.begin();
 		end = line.end();
 		while (begin != end)
@@ -170,7 +172,9 @@ void RequestHandler::parseHeader()
 	}
 }
 
-void	RequestHandler::setPath()
+/*void	RequestHandler::setPath()
 {
+	std::string	path;
+
 	
-}
+}*/

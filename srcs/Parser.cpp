@@ -791,8 +791,8 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
             this->cgiParser(it, servers[i]);
         if (*it == "root")
             this->rootParser(it, servers[i], 0);
-        if (*it == "alias")
-            this->rootParser(it, servers[i], 1);
+        /*if (*it == "alias")
+            this->rootParser(it, servers[i], 1);*/
         if (*it == "location")
             this->locationParser(it, servers[i]);
     }
