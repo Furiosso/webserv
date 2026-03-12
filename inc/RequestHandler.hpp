@@ -34,8 +34,9 @@ public:
 	void	setClientFd(int fd);
 	int		getClientFd() const;
 	void	setPath();
-	bool	checkMethod(std::string method, std::vector<std::string> vec);
-	void	checkPathValidity(std::string& path, std::vector<std::string> index, bool autoindex);
+	bool	checkMethod(std::string& method, const std::vector<std::string>& vec);
+	void	checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex);
+	std::string	joinPath(const std::string& a, const std::string& b);
 };
 
 

@@ -45,7 +45,7 @@ void RequestHandler::chargeHeader(int fd, size_t maxBodySize)
 	}
 }
 
-bool	RequestHandler::checkMethod(std::string method, std::vector<std::string> vec)
+bool	RequestHandler::checkMethod(std::string& method, const std::vector<std::string>& vec)
 {
 	if (std::find(vec.begin(), vec.end(), method) == vec.end())
 		return false;
@@ -222,17 +222,17 @@ void	RequestHandler::setPath()
 				if (it->isAlias)
 				{
 					std::string	rest = _headerContent.path.substr(it->path.size());
-					_headerContent.path = it->root + rest;
+					_headerContent.path = joinPath(it->root, rest);
 					checkPathValidity(_headerContent.path, index, autoindex);
 					return ;
 				}
 				if (it->isRoot)
 				{
-					_headerContent.path = it->root + _headerContent.path;
+					_headerContent.path = joinPath(it->root, _headerContent.path);
 					checkPathValidity(_headerContent.path, index, autoindex);
 					return ;
 				}
-				_headerContent.path = _listener.getConfig().root + _headerContent.path;
+				_headerContent.path = joinPath(_listener.getConfig().root, _headerContent.path);
 				checkPathValidity(_headerContent.path, index, autoindex);
 				return ;
 			}
@@ -240,7 +240,7 @@ void	RequestHandler::setPath()
 	}
 }
 
-void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::string> index, bool autoindex)
+void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex)
 {
 	struct stat st;
 
@@ -261,15 +261,15 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 				std::string							needle;
 				for (; it != end; ++it)
 				{
-					if (access((path + "/" + *it).c_str(), F_OK) == 0)
+					if (access(joinPath(path, *it).c_str(), F_OK) == 0)
 					{
-						if (access((path + "/" + *it).c_str(), R_OK) != 0)
+						if (access(joinPath(path, *it).c_str(), R_OK) != 0)
 						{
 							_error = 403;
 							return ;
 						}
-						_headerContent.path += "/";
-						_headerContent.path += *it;
+						//comprobar que la ruta no ha salido del root
+						_headerContent.path = joinPath(_headerContent.path, *it);
 						return ;
 					}
 				}
@@ -282,4 +282,11 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 		}
 	}
 	_error = 404;
+}
+
+std::string	RequestHandler::joinPath(const std::string& a, const std::string& b)
+{
+    if (a[a.size()-1] == '/')
+        return a + b;
+    return a + "/" + b;
 }

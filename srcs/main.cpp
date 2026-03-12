@@ -115,6 +115,7 @@ int main (int argc, char** argv, char** env)
             }
             for(std::vector<struct pollfd>::size_type i = 0; i < pollfds.size(); ++i)
             {
+				//comprobar signals
 				if (!(pollfds[i].revents & POLLIN) && !(pollfds[i].revents & POLLOUT))
 				{
 					close(pollfds[i].fd);
