@@ -12,6 +12,7 @@ Server::Server()
 	_config.root = "";
 	_config.isRoot = false;
 	_config.isAlias = false;
+	_config.isAutoindex = false;
 	_config.client_max_body_size = 1048576;
 }
 
@@ -35,6 +36,7 @@ void	Server::addIndex(std::string& name)
 void	Server::setAutoindex(bool aI)
 {
 	_config.autoindex = aI;
+	_config.isAutoindex = true;
 }
 
 void	Server::setRoot(std::string& r, int n)

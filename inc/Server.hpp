@@ -15,6 +15,7 @@ struct LocationConfig
     std::map<std::string, std::string>	cgi;
 	std::map<int, std::string>			error_pages;
 	bool								autoindex;
+	bool								isAutoindex;
 	//bool								isRootOrAlias;
 	bool								isRoot;
 	bool								isAlias;
@@ -34,6 +35,7 @@ struct ServerConfig
 	size_t									client_max_body_size;
 	std::vector<LocationConfig>				locations;
 	std::vector<std::string>				allowed_methods;
+	bool									isAutoindex;
 	bool									isRoot;
 	bool									isAlias;
 	//bool									isRootOrAlias; // if true

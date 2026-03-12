@@ -45,6 +45,13 @@ void RequestHandler::chargeHeader(int fd, size_t maxBodySize)
 	}
 }
 
+bool	RequestHandler::checkMethod(std::string method, std::vector<std::string> vec)
+{
+	if (std::find(vec.begin(), vec.end(), method) == vec.end())
+		return false;
+	return true; 
+}
+
 void RequestHandler::parseHeader()
 {
 	std::vector<std::string>	tokens;
@@ -74,7 +81,12 @@ void RequestHandler::parseHeader()
 	}
 	if (token != "GET" && token != "POST" && token != "DELETE")
 	{
-		this->_error = 505;
+		this->_error = 405;
+		return ;
+	}
+	if (checkMethod(token, _listener.getConfig().allowed_methods) == false)
+	{
+		_error = 405;
 		return ;
 	}
 	this->_headerContent.method = token;
@@ -87,7 +99,13 @@ void RequestHandler::parseHeader()
 			break;
 		token.push_back(*begin);
 	}
+	if (token[0] != '/')
+	{
+		_error = 400;
+		return ;
+	}
 	this->_headerContent.path = token;
+	//comprobar si el path tiene una extension para cgi
 	token = "";
 	while (*begin == ' ')
 		++begin;
@@ -172,9 +190,96 @@ void RequestHandler::parseHeader()
 	}
 }
 
-/*void	RequestHandler::setPath()
+void	RequestHandler::setPath()
 {
-	std::string	path;
+	const std::vector<LocationConfig>& locations = _listener.getConfig().locations;
 
-	
-}*/
+	if (!locations.empty())
+	{
+		std::vector<LocationConfig>::const_iterator it = locations.begin();
+		std::vector<LocationConfig>::const_iterator end = locations.end();
+		std::vector<std::string>					index;
+		bool										autoindex;
+
+		autoindex = false;
+		for (; it != end; ++it)
+		{
+			if (it->path.size() < _headerContent.path.size() && _headerContent.path.compare(0, it->path.size(), it->path))
+			{
+				if (checkMethod(_headerContent.method, it->allowed_methods) == false)
+				{
+					_error = 405;
+					return ;
+				}
+				if (!_listener.getConfig().index.empty())
+					index = _listener.getConfig().index;
+				if (!it->index.empty())
+					index = it->index;
+				if (_listener.getConfig().isAutoindex == true)
+					autoindex = _listener.getConfig().autoindex;
+				if (it->isAutoindex == true)
+					autoindex = it->autoindex;
+				if (it->isAlias)
+				{
+					std::string	rest = _headerContent.path.substr(it->path.size());
+					_headerContent.path = it->root + rest;
+					checkPathValidity(_headerContent.path, index, autoindex);
+					return ;
+				}
+				if (it->isRoot)
+				{
+					_headerContent.path = it->root + _headerContent.path;
+					checkPathValidity(_headerContent.path, index, autoindex);
+					return ;
+				}
+				_headerContent.path = _listener.getConfig().root + _headerContent.path;
+				checkPathValidity(_headerContent.path, index, autoindex);
+				return ;
+			}
+		}
+	}
+}
+
+void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::string> index, bool autoindex)
+{
+	struct stat st;
+
+	if (stat(path.c_str(), &st) == 0)
+	{
+    	if (S_ISREG(st.st_mode))
+		{
+			if (access(path.c_str(), R_OK) != 0)
+				_error = 403;
+			return ;
+		}
+    	if (S_ISDIR(st.st_mode))
+        {
+			if (!index.empty())
+			{
+				std::vector<std::string>::iterator	it = index.begin();
+				std::vector<std::string>::iterator	end = index.end();
+				std::string							needle;
+				for (; it != end; ++it)
+				{
+					if (access((path + "/" + *it).c_str(), F_OK) == 0)
+					{
+						if (access((path + "/" + *it).c_str(), R_OK) != 0)
+						{
+							_error = 403;
+							return ;
+						}
+						_headerContent.path += "/";
+						_headerContent.path += *it;
+						return ;
+					}
+				}
+			}
+			if (autoindex == true)
+				;//generar body de la respuesta con el listado del directorio
+			else
+				_error = 403;
+			return ;
+		}
+	}
+	_error = 404;
+}

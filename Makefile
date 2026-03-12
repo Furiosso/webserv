@@ -1,6 +1,6 @@
 NAME = webserv
 CXX = c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -fsanitize="address,leak" -fno-omit-frame-pointer -O2
+CXXFLAGS = -Wall -Wextra -Werror -std=c++98 #-fsanitize="address,leak" -fno-omit-frame-pointer -O2
 
 INC			= inc/
 SRCS_DIR	= srcs/

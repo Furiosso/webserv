@@ -219,7 +219,9 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
         std::string port = t.substr(pos + 1);
             
         if (ip.size() == 0 || port.size() == 0 || !check_ipv4(ip) || !check_port(port))
+        {
             throw std::exception();
+        }
         if (ip == "localhost")
             ip = "127.0.0.1";
         ++it;
@@ -536,8 +538,8 @@ void	Parser::cgiParser(std::vector<std::string>::iterator& it, Server& server)
     if (*(it + 2) != ";" || !isCgiWord(str))
         throw std::exception();
     ++it;
-    if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
-        throw std::exception();
+    /*if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
+        throw std::exception();*/ //DESCOMENTAR EN 42
     server.addCgi(*(it - 1), *it);
 	++it;
 }
@@ -551,6 +553,8 @@ void    Parser::rootParser(std::vector<std::string>::iterator& it, Server& serve
     //{
     //    throw std::exception();
     //}
+    if (n == 1)
+        throw std::exception();
     server.setRoot(*it, n);
 }
 
@@ -599,10 +603,9 @@ void	Parser::cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig
     if (*(it + 2) != ";" || !isCgiWord(str))
         throw std::exception();
     ++it;
-    if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
-        throw std::exception();
-	else
-		loc.cgi.insert(std::pair<std::string, std::string>(*(it - 1), *it));
+    /*if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
+        throw std::exception();*/ // DESCOMENTAR EN 42
+	loc.cgi.insert(std::pair<std::string, std::string>(*(it - 1), *it));
 	++it;
 }
 
@@ -617,6 +620,7 @@ void    Parser::autoindexLocParser(std::vector<std::string>::iterator& it, Locat
         loc.autoindex = true;
     else
         loc.autoindex = false;
+    loc.isAutoindex = true;
     ++it;
 }
 
@@ -697,6 +701,7 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
 	++it;
     loc.isRoot = false;
     loc.isAlias = false;
+    loc.isAutoindex = false;
 	while (*it != "}")
 	{
 		if (*it == "root")
@@ -791,8 +796,8 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
             this->cgiParser(it, servers[i]);
         if (*it == "root")
             this->rootParser(it, servers[i], 0);
-        /*if (*it == "alias")
-            this->rootParser(it, servers[i], 1);*/
+        if (*it == "alias")
+            this->rootParser(it, servers[i], 1);
         if (*it == "location")
             this->locationParser(it, servers[i]);
     }
@@ -866,6 +871,7 @@ int    Parser::tokenize()
         _tokens.push_back(token);
     if (curly_braces != 0)
         return 1;
+    return 0;
 }
 
 std::vector<std::string>    Parser::get_tokens(){ return _tokens; }

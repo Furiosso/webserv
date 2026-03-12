@@ -4,6 +4,7 @@
 # include "ServerSocket.hpp"
 # include <algorithm>
 # include <sstream>
+# include <sys/stat.h>
 
 struct HeaderContent
 {
@@ -33,6 +34,8 @@ public:
 	void	setClientFd(int fd);
 	int		getClientFd() const;
 	void	setPath();
+	bool	checkMethod(std::string method, std::vector<std::string> vec);
+	void	checkPathValidity(std::string& path, std::vector<std::string> index, bool autoindex);
 };
 
 
