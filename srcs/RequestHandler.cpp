@@ -82,7 +82,6 @@ void RequestHandler::parseHeader()
 	}
 	if (checkMethod(token, _listener.getConfig().allowed_methods) == false)
 	{
-		std::cout << "2: " << token << std::endl;
 		_error = 405;
 		return ;
 	}
