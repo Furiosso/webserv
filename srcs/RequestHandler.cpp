@@ -11,9 +11,9 @@ void RequestHandler::setClientFd(int fd) { this->_fd = fd; }
 
 int RequestHandler::getClientFd() const { return this->_fd; }
 
-void RequestHandler::chargeHeader(int fd, size_t maxBodySize)
+void RequestHandler::chargeHeader()
 {
-	ssize_t bytesRead = recv(fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
+	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
 	if (bytesRead < 0)
 	{
 		std::cerr << "Error reading from socket: " << strerror(errno) << std::endl;
@@ -26,17 +26,12 @@ void RequestHandler::chargeHeader(int fd, size_t maxBodySize)
 		this->_buffer[bytesRead] = '\0'; // Null-terminate the buffer
 		this->_header += this->_buffer; // Append to the request string
 		ft_bzero(this->_buffer, sizeof(this->_buffer));
-		// Check if the request exceeds the maximum body size
-		if (this->_header.size() > maxBodySize)
-		{
-			this->_error = 413; // Payload Too Large
-			return ;
-		}
 		if (this->_header.find("\r\n\r\n") != std::string::npos) // End of headers
 		{
 			size_t headerEnd = this->_header.find("\r\n\r\n");
 			this->_header = this->_header.substr(0, headerEnd);
 			this->parseHeader();
+			std::cout << this->_header << std::endl;
 			this->setPath();
 			this->_request[0] = this->_header.substr(0, this->_header.find("\r\n")); // Request line
 			if (headerEnd + 4 < this->_header.size())
@@ -63,6 +58,7 @@ void RequestHandler::parseHeader()
 		return ;
 	headerEnd = this->_header.find("\r\n"); //Host: localhost\r\n
 	line = this->_header.substr(0, headerEnd); //Host: localhost
+	std::cout << "line: " << line << std::endl;
 	this->_header = this->_header.substr(headerEnd + 2, this->_header.size()); //this->_header = this->_header.substr(headerEnd + 2);
 	if (wordCounter(line, ' ') != 3)
 	{
@@ -80,16 +76,18 @@ void RequestHandler::parseHeader()
 		token.push_back(*begin);
 	}
 	if (token != "GET" && token != "POST" && token != "DELETE")
-	{
+	{	
 		this->_error = 405;
 		return ;
 	}
 	if (checkMethod(token, _listener.getConfig().allowed_methods) == false)
 	{
+		std::cout << "2: " << token << std::endl;
 		_error = 405;
 		return ;
 	}
 	this->_headerContent.method = token;
+	std::cout << "method: " << token << std::endl;
 	token = "";
 	while (*begin == ' ')
 		++begin;
@@ -107,6 +105,7 @@ void RequestHandler::parseHeader()
 	this->_headerContent.path = token;
 	if (checkExtention(this->_headerContent.path, ".py") == true)
 		;//desviar el flujo hacia el gestor de cgi
+	std::cout << "path: " << token << std::endl;
 	token = "";
 	while (*begin == ' ')
 		++begin;
@@ -117,6 +116,7 @@ void RequestHandler::parseHeader()
 		this->_error = 505;
 		return ;
 	}
+	std::cout << "protocol: " << token << std::endl;
 	this->_headerContent.protocol = token;
 	while (*begin == ' ')
 		++begin;

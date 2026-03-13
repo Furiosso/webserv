@@ -66,7 +66,6 @@ bool	ServerSocket::createListeners(std::vector<Server>& servers)
 		{
 			std::string ip = it->first;
 			std::string	port = it->second;
-			std::cout << "ip: " << ip << " | port: " << port << "\n";
 			std::pair<std::string, std::string> key(ip, port);
 			if (_created.find(key) != _created.end())
 				continue;

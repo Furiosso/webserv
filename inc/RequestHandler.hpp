@@ -29,7 +29,7 @@ private:
 public:
 	RequestHandler(Server& listener, int fd);
 	~RequestHandler();
-	void	chargeHeader(int fd, size_t maxBodySize);
+	void	chargeHeader();
 	void	parseHeader();
 	void	setClientFd(int fd);
 	int		getClientFd() const;

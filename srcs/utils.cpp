@@ -8,7 +8,7 @@ void    ft_bzero(void *s, size_t n)
 
     buff = static_cast<unsigned char*>(s);
     i = 0;
-    while (i < n && buff[i])
+    while (i < n)
     {
         buff[i] = 0;
         ++i;
@@ -61,16 +61,18 @@ size_t	wordCounter(std::string& line, char splitter)
 	std::string::iterator	end = line.end();
 	size_t					n;
 
+    std::cout << "line in function: " << line << " | *it: " << *it << std::endl;
 	n = 0;
 	for (; it != end; ++it)
 	{
-		while (*it == splitter && it != end)
+		while (it != end && *it == splitter)
 			++it;
-		while (*it != splitter &&  it != end)
+		while (it != end && *it != splitter)
 			++it;
-		while (*it == splitter &&  it != end)
+		while (it != end && *it == splitter)
 			++it;
 		++n;
+        --it;
 	}
 	return n;
 }

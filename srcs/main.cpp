@@ -116,8 +116,9 @@ int main (int argc, char** argv, char** env)
             for(std::vector<struct pollfd>::size_type i = 0; i < pollfds.size(); ++i)
             {
 				//comprobar signals
-				if (!(pollfds[i].revents & POLLIN) && !(pollfds[i].revents & POLLOUT))
+                if (pollfds[i].revents & POLLHUP)
 				{
+                    //std::cout << "sus muertos\n";
 					close(pollfds[i].fd);
 					std::swap(pollfds[i], pollfds.back());
 					pollfds.pop_back();
@@ -125,11 +126,13 @@ int main (int argc, char** argv, char** env)
 				}
 				if(pollfds[i].revents & POLLIN)
 				{
+                    
                     int fd = pollfds[i].fd;
                     bool    is_listen = sockman.isListener(fd);
 					if (is_listen)
                     {
                         int client_fd = sockman.acceptNewClient(fd);
+                        std::cout << "listen fd: " << fd << " | client fd: " << client_fd << "\n";
                         if (client_fd > 0)
                         {
                             struct pollfd newp;
@@ -141,7 +144,9 @@ int main (int argc, char** argv, char** env)
 							{
 								if (servers[j].getFd() == fd)
 								{
+                                    std::cout << "fd server = " << fd << std::endl;
 									RequestHandler client(servers[j], client_fd);
+                                    client.chargeHeader();
 									clients.push_back(client);
 									break;
 								}
