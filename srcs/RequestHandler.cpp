@@ -33,6 +33,8 @@ void RequestHandler::chargeHeader()
 			this->parseHeader();
 			std::cout << this->_header << std::endl;
 			this->setPath();
+			std::cout << "error: " << this->_error << std::endl;
+			std::cout << "header path: " << this->_headerContent.path << std::endl;
 			this->_request[0] = this->_header.substr(0, this->_header.find("\r\n")); // Request line
 			if (headerEnd + 4 < this->_header.size())
 				this->_body = this->_header.substr(headerEnd + 4);
@@ -62,6 +64,7 @@ void RequestHandler::parseHeader()
 	this->_header = this->_header.substr(headerEnd + 2, this->_header.size()); //this->_header = this->_header.substr(headerEnd + 2);
 	if (wordCounter(line, ' ') != 3)
 	{
+		std::cout << "me cago en sus muertos sera aqui" << std::endl;
 		this->_error = 400;
 		return ;
 	}
@@ -98,6 +101,7 @@ void RequestHandler::parseHeader()
 	}
 	if (token[0] != '/')
 	{
+		std::cout << "seguro que es aqui" << std::endl;
 		_error = 400;
 		return ;
 	}
@@ -123,11 +127,12 @@ void RequestHandler::parseHeader()
 	while (this->_header.find("\r\n") != std::string::npos)
 	{
 		line = this->_header.substr(0, this->_header.find("\r\n")); 
-		if (wordCounter(line, ':') != 2)
+		/*if (wordCounter(line, ':') != 2)
 		{
+			std::cout << "line: " << line << std::endl;
 			this->_error = 400;
 			return ;
-		}
+		}*/
 		begin = line.begin();
 		end = line.end();
 		while (begin != end)
@@ -151,11 +156,12 @@ void RequestHandler::parseHeader()
 					break ;
 				default:
 					token.push_back(*begin);
-					token = "";
+					//token = "";
 			}
 			++begin;
 		}
-		this->_header = this->_header.substr(this->_header.find("\r\n"), this->_header.size());
+		this->_header = this->_header.substr(this->_header.find("\r\n") + 2);
+		std::cout << "this->_header:\n" << this->_header  << std::endl << std::endl;
 	}
 	std::vector<std::string>::iterator	vegin = tokens.begin();
 	std::vector<std::string>::iterator	vend = tokens.end();
@@ -204,8 +210,10 @@ void	RequestHandler::setPath()
 		autoindex = false;
 		for (; it != end; ++it)
 		{
-			if (it->path.size() < _headerContent.path.size() && _headerContent.path.compare(0, it->path.size(), it->path))
+			//std::cout << "it->path: " << it->path << " | _headerContent.path: " << _headerContent.path << " | path.size: " << it->path.size() << " | headercontent.path.size: " << _headerContent.path.size() << " | compare: " << _headerContent.path.compare(0, it->path.size(), it->path) << std::endl;
+			if (it->path.size() <= _headerContent.path.size() && _headerContent.path.compare(0, it->path.size(), it->path) == 0)
 			{
+				std::cout << "it->path: " << it->path << std::endl;
 				if (checkMethod(_headerContent.method, it->allowed_methods) == false)
 				{
 					_error = 405;
@@ -222,21 +230,22 @@ void	RequestHandler::setPath()
 				if (it->isAlias)
 				{
 					std::string	rest = _headerContent.path.substr(it->path.size());
-					_headerContent.path = joinPath(it->root, rest);
+					_headerContent.path = it->root + rest;
 					checkPathValidity(_headerContent.path, index, autoindex, it->root);
 					return ;
 				}
 				if (it->isRoot)
 				{
-					_headerContent.path = joinPath(it->root, _headerContent.path);
+					_headerContent.path = it->root + _headerContent.path;
 					checkPathValidity(_headerContent.path, index, autoindex, it->root);
 					return ;
 				}
-				_headerContent.path = joinPath(_listener.getConfig().root, _headerContent.path);
+				_headerContent.path = _listener.getConfig().root + _headerContent.path;
 				checkPathValidity(_headerContent.path, index, autoindex, _listener.getConfig().root);
 				return ;
 			}
 		}
+		std::cout << "perdona" << std::endl;
 	}
 }
 
@@ -324,7 +333,7 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 				_error = 404;
 				return ;
 			}
-			if (isWithinRoot(path, root))
+			if (!isWithinRoot(path, root))
 			{
 				_error = 403;
 				return ;
@@ -340,14 +349,15 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 				std::string							needle;
 				for (; it != end; ++it)
 				{
+					std::cout << "index: " << joinPath(path, *it) << std::endl;
 					if (access(joinPath(path, *it).c_str(), F_OK) == 0)
 					{
-						if (access(joinPath(path, *it).c_str(), R_OK) != 0 /*&& isWithinRoot(path, _list)*/)
+						if (access(joinPath(path, *it).c_str(), R_OK) != 0)
 						{
 							_error = 404;
 							return ;
 						}
-						if (isWithinRoot(path, root))
+						if (!isWithinRoot(joinPath(path, *it), root))
 						{
 							_error = 403;
 							return ;
@@ -369,9 +379,11 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 	_error = 404;
 }
 
-std::string	RequestHandler::joinPath(const std::string& a, const std::string& b)
+std::string	RequestHandler::joinPath(const std::string& a, const std::string& b) // revisar esta funcion
 {
-    if (a[a.size()-1] == '/')
-        return a + b;
-    return a + "/" + b;
+    if (a[a.size() - 1] == '/')
+	{
+    	return a + b;
+	}
+	return a + "/" + b;
 }
