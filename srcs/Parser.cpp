@@ -538,8 +538,8 @@ void	Parser::cgiParser(std::vector<std::string>::iterator& it, Server& server)
     if (*(it + 2) != ";" || !isCgiWord(str))
         throw std::exception();
     ++it;
-    /*if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
-        throw std::exception();*/ //DESCOMENTAR EN 42
+    if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
+        throw std::exception();
     server.addCgi(*(it - 1), *it);
 	++it;
 }
@@ -603,8 +603,10 @@ void	Parser::cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig
     if (*(it + 2) != ";" || !isCgiWord(str))
         throw std::exception();
     ++it;
-    /*if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
-        throw std::exception();*/ // DESCOMENTAR EN 42
+    if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
+    {
+        throw std::exception();
+    }
 	loc.cgi.insert(std::pair<std::string, std::string>(*(it - 1), *it));
 	++it;
 }

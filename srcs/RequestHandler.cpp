@@ -105,7 +105,8 @@ void RequestHandler::parseHeader()
 		return ;
 	}
 	this->_headerContent.path = token;
-	//comprobar si el path tiene una extension para cgi
+	if (checkExtention(this->_headerContent.path, ".py") == true)
+		;//desviar el flujo hacia el gestor de cgi
 	token = "";
 	while (*begin == ' ')
 		++begin;
@@ -223,24 +224,95 @@ void	RequestHandler::setPath()
 				{
 					std::string	rest = _headerContent.path.substr(it->path.size());
 					_headerContent.path = joinPath(it->root, rest);
-					checkPathValidity(_headerContent.path, index, autoindex);
+					checkPathValidity(_headerContent.path, index, autoindex, it->root);
 					return ;
 				}
 				if (it->isRoot)
 				{
 					_headerContent.path = joinPath(it->root, _headerContent.path);
-					checkPathValidity(_headerContent.path, index, autoindex);
+					checkPathValidity(_headerContent.path, index, autoindex, it->root);
 					return ;
 				}
 				_headerContent.path = joinPath(_listener.getConfig().root, _headerContent.path);
-				checkPathValidity(_headerContent.path, index, autoindex);
+				checkPathValidity(_headerContent.path, index, autoindex, _listener.getConfig().root);
 				return ;
 			}
 		}
 	}
 }
 
-void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex)
+static std::string	normalizePath(const std::string& p)
+{
+	std::string path = p;
+	if (path.empty())
+		return std::string("/");
+	bool absolute = (path[0] =='/');
+	std::vector<std::string> parts;
+	size_t	i = 0;
+	while (i < path.size())
+	{
+		// skip consecutive '/'
+		while (i < path.size() && path[i] == '/')
+			++i;
+		if (i >= path.size())
+			break;
+		size_t j = i;
+		while (j < path.size() && path[j] != '/')
+			++j;
+		std::string	token = path.substr(i, j - i);
+		if (token == "." || token.empty())
+			continue;
+		else if (token == "..")
+		{
+			if (!parts.empty() && parts.back() != "..")
+				parts.pop_back();
+			else if (!absolute)
+				parts.push_back("..");
+		}
+		else
+			parts.push_back(token);
+		i = j;
+	}
+	std::string out;
+	if (absolute)
+		out = "/";
+	for (size_t k = 0; k < parts.size(); ++k)
+	{
+		if (!(absolute && k == 0) && out.size() > 0 && out[out.size() -1] != '/')
+			out += "/";
+		out += parts[k];
+	}
+	if (out.empty())
+	{
+		if (absolute)
+			out = std::string("/");
+		else
+			out = std::string(".");
+	}
+	if (out.size() > 1 && out[out.size() - 1] == '/')
+		out.erase(out.size() - 1);
+	return out;
+}
+
+static bool	isWithinRoot(const std::string& candidate, const std::string& root)
+{
+	std::string	r = normalizePath(root);
+	std::string	c = normalizePath(candidate);
+
+	if (c.empty() || c[0] != '/')
+		return false;
+	if (r == "/")
+		return true;
+	if (r.size() > 1 && r[r.size() - 1] == '/')	
+		r.erase(r.size() - 1);
+	if (c == r)
+		return true;
+	if (c.size() > r.size() && c.compare(0, r.size(), r) == 0 && c[r.size()] == '/')
+		return true;
+	return false;
+}
+
+void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex, const std::string& root)
 {
 	struct stat st;
 
@@ -249,7 +321,15 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
     	if (S_ISREG(st.st_mode))
 		{
 			if (access(path.c_str(), R_OK) != 0)
+			{
+				_error = 404;
+				return ;
+			}
+			if (isWithinRoot(path, root))
+			{
 				_error = 403;
+				return ;
+			}
 			return ;
 		}
     	if (S_ISDIR(st.st_mode))
@@ -263,12 +343,18 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 				{
 					if (access(joinPath(path, *it).c_str(), F_OK) == 0)
 					{
-						if (access(joinPath(path, *it).c_str(), R_OK) != 0)
+						if (access(joinPath(path, *it).c_str(), R_OK) != 0 /*&& isWithinRoot(path, _list)*/)
+						{
+							_error = 404;
+							return ;
+						}
+						if (isWithinRoot(path, root))
 						{
 							_error = 403;
 							return ;
 						}
-						//comprobar que la ruta no ha salido del root
+						if (checkExtention(path, ".py") == true)
+							;//comprobar si el path tiene una extension para cgi
 						_headerContent.path = joinPath(_headerContent.path, *it);
 						return ;
 					}

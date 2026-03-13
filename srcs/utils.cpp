@@ -84,3 +84,17 @@ std::string strToLower(std::string& s)
         ret.push_back(std::tolower(*it));
     return ret;
 }
+
+bool	checkExtention(std::string& name, std::string extention)
+{
+	size_t	index[2];
+
+	index[0] = name.size() - 1;
+	index[1] = extention.size() - 1;
+	while (name[index[0]] && extention[index[1]])
+	{
+		if (name[index[0]--] != extention[index[1]--])
+			return false;
+	}
+	return true;
+}
