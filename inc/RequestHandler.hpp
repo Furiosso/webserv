@@ -25,14 +25,19 @@ private:
 	int						_error;
 	std::string				_header;
 	std::string				_body;
+	bool					_isHeaderReady;
+	bool					_isBodyReady;
 	struct HeaderContent	_headerContent;
 public:
 	RequestHandler(Server& listener, int fd);
 	~RequestHandler();
 	void	chargeHeader();
+	void	chargeBody();
 	void	parseHeader();
 	void	setClientFd(int fd);
 	int		getClientFd() const;
+	bool	getIsHeaderReady() const;
+	bool	getIsBodyReady() const;
 	void	setPath();
 	bool	checkMethod(std::string& method, const std::vector<std::string>& vec);
 	void	checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex, const std::string& root);

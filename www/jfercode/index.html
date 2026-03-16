@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8" />
+	<meta content="width=device-width, initial-scale=1.0" name="viewport" />
+	<title>Javier Fernández Correa - Software Developer</title>
+
+	<!-- Tailwind CSS -->
+	<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+
+	<!-- Google Fonts -->
+	<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap"
+		rel="stylesheet" />
+	<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+
+	<!-- Favicon -->
+	<link rel="icon" href="/static/test/favicon-16x16.png" type="image/png" />
+
+	<!-- Custom Styles -->
+	<link rel="stylesheet" href="styles.css" />
+
+	<!-- Tailwind Config -->
+	<script src="tailwind.config.js"></script>
+</head>
+
+<body class="font-display">
+	<div class="relative flex h-auto min-h-screen w-full flex-col">
+		<div class="layout-container flex h-full grow flex-col">
+			<!-- Header -->
+			<header
+				class="sticky top-0 z-50 backdrop-blur-md bg-primary/90 border-b-2 border-accent px-4 sm:px-10 py-4">
+				<div class="max-w-7xl mx-auto flex items-center justify-between">
+					<div class="flex items-center gap-3">
+						<div
+							class="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-highlight flex items-center justify-center font-bold text-primary">
+							JFC
+						</div>
+						<h2 class="text-text-primary text-xl font-bold">
+							jfercode
+						</h2>
+					</div>
+					<nav class="hidden md:flex items-center gap-6">
+						<a href="http://127.0.0.1:8002"
+							class="flex items-center gap-2 bg-gradient-to-r from-highlight to-accent hover:from-accent hover:to-highlight text-white font-bold py-2 px-5 rounded-full transition-all transform hover:scale-105 shadow-md">
+							<span class="material-symbols-outlined text-lg">sync_alt</span>
+							Gerardo de la Cruz</a>
+						<a class="text-text-primary hover:text-accent transition-colors font-medium"
+							href="#about">About</a>
+						<a class="text-text-primary hover:text-accent transition-colors font-medium"
+							href="#tech-stack">Skills</a>
+						<a class="text-text-primary hover:text-accent transition-colors font-medium"
+							href="#projects">Projects</a>
+						<a class="text-text-primary hover:text-accent transition-colors font-medium"
+							href="#experience">Experience</a>
+						<a class="text-text-primary hover:text-accent transition-colors font-medium"
+							href="#webserv-test">Webserv</a>
+						<a class="text-text-primary hover:text-accent transition-colors font-medium"
+							href="#contact">Contact</a>
+						<a href="https://github.com/jfercode" target="_blank"
+							class="bg-gradient-to-r from-accent to-highlight hover:from-highlight hover:to-accent text-white font-bold py-2 px-6 rounded-full transition-all transform hover:scale-105">
+							GitHub
+						</a>
+					</nav>
+					<div class="md:hidden">
+						<button id="mobile-menu-btn" class="text-text-primary hover:text-accent transition-colors">
+							<span class="material-symbols-outlined text-3xl">menu</span>
+						</button>
+					</div>
+				</div>
+			</header>
+
+			<!-- Mobile Menu -->
+			<div id="mobile-menu" class="mobile-menu md:hidden bg-secondary border-b-2 border-accent">
+				<div class="flex flex-col gap-4 p-6">
+					<a href="/redirect"
+						class="flex items-center gap-2 text-highlight hover:text-accent font-bold transition-colors">
+						<span class="material-symbols-outlined">sync_alt</span>
+						Gerardo de la Cruz</a>
+					<a class="text-text-primary hover:text-accent transition-colors font-medium" href="#about">About</a>
+					<a class="text-text-primary hover:text-accent transition-colors font-medium"
+						href="#tech-stack">Skills</a>
+					<a class="text-text-primary hover:text-accent transition-colors font-medium"
+						href="#projects">Projects</a>
+					<a class="text-text-primary hover:text-accent transition-colors font-medium"
+						href="#experience">Experience</a>
+					<a class="text-text-primary hover:text-accent transition-colors font-medium"
+						href="#webserv-test">Webserv</a>
+					<a class="text-text-primary hover:text-accent transition-colors font-medium"
+						href="#contact">Contact</a>
+					<a href="https://github.com/jfercode" target="_blank" class="text-accent font-medium">GitHub
+						Profile
+						→</a>
+				</div>
+			</div>
+
+			<main class="flex-1">
+				<!-- Hero Section -->
+				<section class="px-4 py-20 sm:px-10 lg:px-20 min-h-screen flex items-center" id="about">
+					<div class="max-w-7xl mx-auto w-full">
+						<div class="grid lg:grid-cols-2 gap-12 items-center">
+							<div class="order-2 lg:order-1">
+								<div class="inline-block mb-4 px-4 py-2 bg-accent/20 rounded-full">
+									<span class="text-accent font-semibold">👋 Hello World!</span>
+								</div>
+								<h1 class="text-5xl lg:text-7xl font-black mb-6 leading-tight">
+									I'm
+									<span class="gradient-text">Javier Fernández</span>
+								</h1>
+								<h2 class="text-3xl lg:text-4xl font-bold text-accent mb-6">
+									Software Developer
+								</h2>
+								<p class="text-text-secondary text-lg lg:text-xl leading-relaxed mb-6">
+									Mid-level developer passionate about
+									<span class="text-highlight font-semibold">game development</span>,
+									<span class="text-accent font-semibold">low-level programming</span>, and
+									<span class="text-highlight font-semibold">systems engineering</span>. My journey
+									began with
+									<strong>Unreal Engine</strong> and
+									<strong>Unity</strong>, evolving into a
+									deep dive into
+									<strong>computer science
+										fundamentals</strong>.
+								</p>
+								<p class="text-text-secondary text-lg leading-relaxed mb-8">
+									🎓 Currently studying at
+									<span class="text-accent font-bold">42 Madrid</span>, tackling algorithmic,
+									system-level,
+									and team-based challenges.
+								</p>
+								<div class="flex flex-wrap gap-4 mb-8">
+									<div class="flex items-center gap-2 bg-accent/20 px-4 py-2 rounded-full">
+										<span class="material-symbols-outlined text-accent">location_on</span>
+										<span class="text-text-primary">Madrid, Spain</span>
+									</div>
+									<div class="flex items-center gap-2 bg-accent/20 px-4 py-2 rounded-full">
+										<span class="material-symbols-outlined text-accent">email</span>
+										<span class="text-text-primary">jaferco19@gmail.com</span>
+									</div>
+								</div>
+								<div class="flex flex-wrap gap-4">
+									<a href="#projects"
+										class="bg-gradient-to-r from-accent to-highlight hover:from-highlight hover:to-accent text-white font-bold py-4 px-8 rounded-full transition-all transform hover:scale-105 shadow-lg">
+										View My Work
+									</a>
+									<a href="#contact"
+										class="bg-transparent border-2 border-accent hover:bg-accent/10 text-accent font-bold py-4 px-8 rounded-full transition-all">
+										Get In Touch
+									</a>
+								</div>
+							</div>
+							<div class="order-1 lg:order-2 flex justify-center">
+								<div class="relative floating">
+									<div
+										class="absolute inset-0 bg-gradient-to-br from-accent to-highlight rounded-full blur-3xl opacity-30">
+									</div>
+									<img src="https://github.com/jfercode.png" alt="Javier Fernández"
+										class="relative w-80 h-80 lg:w-96 lg:h-96 rounded-full object-cover border-4 border-accent shadow-2xl" />
+								</div>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<!-- Tech Stack Section -->
+				<section class="px-4 py-20 sm:px-10 lg:px-20 bg-secondary/50" id="tech-stack">
+					<div class="max-w-7xl mx-auto">
+						<div class="text-center mb-16">
+							<h2 class="text-4xl lg:text-5xl font-black mb-4">
+								💻
+								<span class="gradient-text">Tech Stack</span>
+							</h2>
+							<p class="text-text-secondary text-xl">
+								Technologies I master
+							</p>
+						</div>
+
+						<!-- Programming Languages -->
+						<div class="mb-16">
+							<h3 class="text-2xl font-bold text-accent mb-8 flex justify-center items-center gap-3">
+								<span class="text-3xl">📝</span> Programming
+								Languages
+							</h3>
+							<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6">
+								<div class="tech-badge p-6 bg-accent/20 rounded-2xl border-2 border-accent text-center">
+									<img src="/static/tech/c.svg" alt="C" class="w-full mb-2 mx-auto" />
+									<span class="text-text-primary font-semibold">C</span>
+								</div>
+								<div class="tech-badge p-6 bg-accent/20 rounded-2xl border-2 border-accent text-center">
+									<img src="/static/tech/c%2B%2B.svg" alt="C++" class="w-full mb-2 mx-auto" />
+									<span class="text-text-primary font-semibold">C++</span>
+								</div>
+								<div class="tech-badge p-6 bg-accent/20 rounded-2xl border-2 border-accent text-center">
+									<img src="/static/tech/c%23.svg" alt="C#" class="w-full mb-2 mx-auto" />
+									<span class="text-text-primary font-semibold">C#</span>
+								</div>
+								<div class="tech-badge p-6 bg-accent/20 rounded-2xl border-2 border-accent text-center">
+									<img src="/static/tech/python.svg" alt="Python" class="w-full mb-2 mx-auto" />
+									<span class="text-text-primary font-semibold">Python</span>
+								</div>
+								<div class="tech-badge p-6 bg-accent/20 rounded-2xl border-2 border-accent text-center">
+									<img src="/static/tech/bash.svg" alt="Bash" class="w-full mb-2 mx-auto" />
+									<span class="text-text-primary font-semibold">Bash</span>
+								</div>
+							</div>
+						</div>
+
+						<!-- Engines & Frameworks -->
+						<div class="grid mb-16">
+							<h3 class="text-2xl font-bold text-accent mb-8 flex justify-center items-center gap-3">
+								<span class="text-3xl">🎮</span> Engines &amp; Frameworks
+							</h3>
+							<div class="flex flex-wrap justify-center gap-6">
+								<div class="tech-badge p-6 bg-accent/20 rounded-2xl border-2 border-accent text-center">
+									<img src="/static/tech/unity.svg" alt="Unity" class="w-24 h-24 mb-2 mx-auto" />
+									<span class="text-text-primary font-semibold">Unity</span>
+								</div>
+								<div class="tech-badge p-6 bg-accent/20 rounded-2xl border-2 border-accent text-center">
+									<img src="/static/tech/unreal.svg" alt="Unreal Engine"
+										class="w-24 h-24 mb-2 mx-auto" /> <span
+										class="text-text-primary font-semibold">Unreal Engine</span>
+								</div>
+							</div>
+						</div>
+
+						<!-- Tools & Platforms -->
+						<div>
+							<h3 class="text-2xl font-bold text-accent mb-8 flex justify-center items-center gap-3">
+								<span class="text-3xl">🛠️</span> Tools &
+								Platforms
+							</h3>
+							<div class="grid grid-cols-2 sm:grid-cols-5 gap-6">
+								<div class="tech-badge p-6 bg-accent/20 rounded-2xl border-2 border-accent text-center">
+									<img src="/static/tech/git.svg" alt="Git" class="w-full mb-2 mx-auto" />
+									<span class="text-text-primary font-semibold">Git</span>
+								</div>
+								<div class="tech-badge p-6 bg-accent/20 rounded-2xl border-2 border-accent text-center">
+									<img src="/static/tech/github.svg" alt="GitHub" class="w-full mb-2 mx-auto" />
+									<span class="text-text-primary font-semibold">GitHub</span>
+								</div>
+								<div class="tech-badge p-6 bg-accent/20 rounded-2xl border-2 border-accent text-center">
+									<img src="/static/tech/docker.svg" alt="Docker" class="w-full mb-2 mx-auto" />
+									<span class="text-text-primary font-semibold">Docker</span>
+								</div>
+								<div class="tech-badge p-6 bg-accent/20 rounded-2xl border-2 border-accent text-center">
+									<img src="/static/tech/vim.svg" alt="Vim" class="w-full mb-2 mx-auto" />
+									<span class="text-text-primary font-semibold">Vim</span>
+								</div>
+								<div class="tech-badge p-6 bg-accent/20 rounded-2xl border-2 border-accent text-center">
+									<img src="/static/tech/visual-studio-code.svg" alt="VS Code"
+										class="w-full mb-2 mx-auto" />
+									<span class="text-text-primary font-semibold">VS Code</span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<!-- Featured Projects Section -->
+				<section class="px-4 py-20 sm:px-10 lg:px-20" id="projects">
+					<div class="max-w-7xl mx-auto">
+						<div class="text-center mb-16">
+							<h2 class="text-4xl lg:text-5xl font-black mb-4">
+								🚀
+								<span class="gradient-text">Featured Projects</span>
+							</h2>
+							<p class="text-text-secondary text-xl">
+								Showcasing my best work from 42 and beyond
+							</p>
+						</div>
+
+						<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+							<!-- Webserv Project -->
+							<div class="project-card p-6 rounded-2xl">
+								<div class="flex items-center justify-between mb-4">
+									<span class="text-4xl">🌐</span>
+									<span class="bg-warning/20 text-warning px-3 py-1 rounded-full text-sm font-bold">In
+										Progress</span>
+								</div>
+								<h3 class="text-2xl font-bold text-text-primary mb-3">
+									Webserv
+								</h3>
+								<p class="text-text-secondary mb-6">
+									Custom HTTP/1.1 server implementation in
+									C++98. Handles GET, POST, DELETE
+									methods, CGI execution, and file
+									uploads. Fully RFC compliant with
+									multiplexing I/O.
+								</p>
+								<div class="flex flex-wrap gap-2 mb-6">
+									<span
+										class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-semibold">C++</span>
+									<span
+										class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-semibold">HTTP</span>
+									<span
+										class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-semibold">Networking</span>
+									<span
+										class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-semibold">CGI</span>
+								</div>
+								<a href="#webserv-test"
+									class="inline-flex items-center gap-2 text-accent hover:text-highlight font-bold transition-colors">
+									Test Live Demo
+									<span class="material-symbols-outlined">arrow_forward</span>
+								</a>
+							</div>
+
+							<!-- Cube3D Project -->
+							<div class="project-card p-6 rounded-2xl">
+								<div class="flex items-center justify-between mb-4">
+									<span class="text-4xl">🧱</span>
+								</div>
+								<h3 class="text-2xl font-bold text-text-primary mb-3">
+									Cube3D
+								</h3>
+								<p class="text-text-secondary mb-6">
+									Raycasting 3D game engine inspired by
+									Wolfenstein 3D. Implements texture
+									mapping, collision detection, and
+									minimap. Built from scratch using
+									MiniLibX graphics library.
+								</p>
+								<div class="flex flex-wrap gap-2 mb-6">
+									<span
+										class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-semibold">C</span>
+									<span
+										class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-semibold">Raycasting</span>
+									<span
+										class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-semibold">Graphics</span>
+									<span
+										class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-semibold">3D</span>
+								</div>
+								<a href="https://github.com/jfercode/42-Cube3D" target="_blank"
+									class="inline-flex items-center gap-2 text-accent hover:text-highlight font-bold transition-colors">
+									View on GitHub
+									<span class="material-symbols-outlined">open_in_new</span>
+								</a>
+							</div>
+
+							<!-- Minishell Project -->
+							<div class="project-card p-6 rounded-2xl">
+								<div class="flex items-center justify-between mb-4">
+									<span class="text-4xl">🚀</span>
+								</div>
+								<h3 class="text-2xl font-bold text-text-primary mb-3">
+									Minishell
+								</h3>
+								<p class="text-text-secondary mb-6">
+									Custom Unix shell implementation.
+									Features include pipe handling,
+									redirections, environment variables,
+									built-in commands, and signal
+									management.
+								</p>
+								<div class="flex flex-wrap gap-2 mb-6">
+									<span
+										class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-semibold">C</span>
+									<span
+										class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-semibold">Unix</span>
+									<span
+										class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-semibold">Processes</span>
+									<span
+										class="bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-semibold">Parsing</span>
+								</div>
+								<a href="https://github.com/jfercode/42-Minishell" target="_blank"
+									class="inline-flex items-center gap-2 text-accent hover:text-highlight font-bold transition-colors">
+									View on GitHub
+									<span class="material-symbols-outlined">open_in_new</span>
+								</a>
+							</div>
+						</div>
+
+						<div class="section-divider"></div>
+
+						<div class="text-center mt-12">
+							<a href="https://github.com/jfercode?tab=repositories" target="_blank"
+								class="inline-flex items-center gap-2 bg-gradient-to-r from-accent to-highlight hover:from-highlight hover:to-accent text-white font-bold py-4 px-8 rounded-full transition-all transform hover:scale-105 shadow-lg">
+								View All Projects on GitHub
+								<span class="material-symbols-outlined">arrow_forward</span>
+							</a>
+						</div>
+					</div>
+				</section>
+
+				<!-- Experience Section -->
+				<section class="px-4 py-20 sm:px-10 lg:px-20 bg-secondary/50" id="experience">
+					<div class="max-w-7xl mx-auto">
+						<div class="text-center mb-16">
+							<h2 class="text-4xl lg:text-5xl font-black mb-4">
+								💼
+								<span class="gradient-text">Experience</span>
+							</h2>
+							<p class="text-text-secondary text-xl">
+								My professional journey
+							</p>
+						</div>
+
+						<div class="space-y-8">
+							<!-- Copyme -->
+							<div class="experience-card p-8 rounded-2xl">
+								<div class="flex flex-col md:flex-row md:items-start md:justify-between mb-6">
+									<div>
+										<h3 class="text-2xl font-bold text-text-primary mb-2">
+											System Administrator -
+											Cybersecurity
+										</h3>
+										<p class="text-accent text-lg font-semibold mb-2">
+											Copyme
+										</p>
+										<span class="text-text-secondary">Sept 2025</span>
+									</div>
+								</div>
+								<ul class="space-y-3 text-text-secondary">
+									<li class="flex items-start gap-3">
+										<span class="text-accent mt-1">▹</span>
+										<span>Managed Active Directory: user
+											accounts, access control, and
+											group policies</span>
+									</li>
+									<li class="flex items-start gap-3">
+										<span class="text-accent mt-1">▹</span>
+										<span>Performed system hardening and
+											security audits with Kali Linux
+											(Nmap, Metasploit,
+											Wireshark)</span>
+									</li>
+									<li class="flex items-start gap-3">
+										<span class="text-accent mt-1">▹</span>
+										<span>Improved IT infrastructure
+											security and incident response
+											planning</span>
+									</li>
+								</ul>
+							</div>
+							<!-- IFEMA Madrid Lab -->
+							<div class="experience-card p-8 rounded-2xl">
+								<div class="flex flex-col md:flex-row md:items-start md:justify-between mb-6">
+									<div>
+										<h3 class="text-2xl font-bold text-text-primary mb-2">
+											Unity Programmer &amp; R&D
+										</h3>
+										<p class="text-accent text-lg font-semibold mb-1">IFEMA Madrid Lab</p>
+										<div class="flex items-center gap-4">
+											<span class="text-text-secondary">Sept 2023 – Dec 2023</span>
+										</div>
+									</div>
+								</div>
+
+								<ul class="space-y-3 text-text-secondary mt-4">
+									<li class="flex items-start gap-3">
+										<span class="text-accent mt-1">▹</span>
+										<span>
+											Developed mobile, VR and AR applications across platforms (iOS, Android,
+											HoloLens 2), collaborating with multidisciplinary teams.
+										</span>
+									</li>
+									<li class="flex items-start gap-3">
+										<span class="text-accent mt-1">▹</span>
+										<span>
+											Implemented features, interactivity and integrations using C# and platform
+											SDKs (Oculus, Pico), ensuring cross-platform compatibility.
+										</span>
+									</li>
+									<li class="flex items-start gap-3">
+										<span class="text-accent mt-1">▹</span>
+										<span>
+											Researched mixed-reality technologies and prototyped R&amp;D concepts to
+											evaluate UX and technical feasibility.
+										</span>
+									</li>
+									<li class="flex items-start gap-3">
+										<span class="text-accent mt-1">▹</span>
+										<span>
+											Managed version control with Git, coordinated merges/branches and kept
+											project documentation up to date.
+										</span>
+									</li>
+								</ul>
+							</div>
+							<!-- Proyecto Dodo -->
+							<div class="experience-card p-8 rounded-2xl">
+								<div class="flex flex-col md:flex-row md:items-start md:justify-between mb-6">
+									<div>
+										<h3 class="text-2xl font-bold text-text-primary mb-2">
+											Unity Programmer
+										</h3>
+										<p class="text-accent text-lg font-semibold mb-2">
+											Proyecto Dodo
+										</p>
+										<span class="text-text-secondary">Mar 2022 – Jun 2023</span>
+									</div>
+								</div>
+								<ul class="space-y-3 text-text-secondary">
+									<li class="flex items-start gap-3">
+										<span class="text-highlight mt-1">▹</span>
+										<span>Developed mobile games and VR
+											apps with multidisciplinary
+											teams</span>
+									</li>
+									<li class="flex items-start gap-3">
+										<span class="text-highlight mt-1">▹</span>
+										<span>Implemented game features and
+											integrations using C#</span>
+									</li>
+									<li class="flex items-start gap-3">
+										<span class="text-highlight mt-1">▹</span>
+										<span>Worked with platform-specific
+											SDKs for mobile and VR</span>
+									</li>
+								</ul>
+							</div>
+
+							<!-- Fly Games -->
+							<div class="experience-card p-8 rounded-2xl">
+								<div class="flex flex-col md:flex-row md:items-start md:justify-between mb-6">
+									<div>
+										<h3 class="text-2xl font-bold text-text-primary mb-2">
+											Unity Developer
+										</h3>
+										<p class="text-accent text-lg font-semibold mb-2">
+											Fly Games
+										</p>
+										<span class="text-text-secondary">Mar 2022 - Jun 2022</span>
+									</div>
+								</div>
+								<ul class="space-y-3 text-text-secondary">
+									<li class="flex items-start gap-3">
+										<span class="text-accent mt-1">▹</span>
+										<span>Developed and integrated mobile
+											game features in
+											production</span>
+									</li>
+									<li class="flex items-start gap-3">
+										<span class="text-accent mt-1">▹</span>
+										<span>Implemented gameplay mechanics
+											for mobile platforms</span>
+									</li>
+									<li class="flex items-start gap-3">
+										<span class="text-accent mt-1">▹</span>
+										<span>Collaborated with designers and
+											artists</span>
+									</li>
+								</ul>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<!-- Webserv Testing Section -->
+				<section class="px-4 py-20 sm:px-10 lg:px-20" id="webserv-test">
+					<div class="max-w-7xl mx-auto">
+						<div class="text-center mb-16">
+							<h2 class="text-4xl lg:text-5xl font-black mb-4">
+								🌐
+								<span class="gradient-text">Webserv Testing</span>
+							</h2>
+							<p class="text-text-secondary text-xl">
+								Live testing environment for HTTP methods
+							</p>
+						</div>
+
+						<!-- 🆕 REDIRECTION Method Section -->
+						<div class="mb-16">
+							<h3 class="text-2xl font-bold text-accent mb-8 flex items-center gap-3">
+								<span class="text-3xl">🔄</span> HTTP Redirection - Test 301/302
+							</h3>
+
+							<div class="webserv-card">
+								<p class="text-text-secondary text-lg mb-6">
+									Test HTTP redirection functionality. Click the buttons below to test different
+									redirection scenarios handled by the Webserv server.
+								</p>
+
+								<div class="grid md:grid-cols-2 gap-6">
+									<!-- Internal Redirection -->
+									<div class="bg-accent/10 p-6 rounded-xl border-2 border-accent">
+										<div class="flex items-center gap-3 mb-4">
+											<span class="text-3xl">🔗</span>
+											<h4 class="text-text-primary font-bold text-xl">Internal Redirect</h4>
+										</div>
+										<p class="text-text-secondary mb-4">
+											Tests server-side redirection to another page within the same domain.
+											The server responds with a <code
+												class="bg-primary px-2 py-1 rounded">302 Found</code>.
+										</p>
+										<a href="/redirect"
+											class="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-highlight hover:from-highlight hover:to-accent text-white font-bold py-3 px-6 rounded-xl transition-all transform hover:scale-105 w-full">
+											<span class="material-symbols-outlined">open_in_new</span>
+											Test Internal Redirect
+										</a>
+										<div class="mt-4 p-3 bg-primary rounded-lg">
+											<p class="text-text-secondary text-sm">
+												<strong class="text-accent">Expected:</strong> Redirects to
+												<code
+													class="bg-accent/20 px-2 py-1 rounded text-xs">/newpage.html</code>
+											</p>
+										</div>
+									</div>
+
+									<!-- External Redirection -->
+									<div class="bg-highlight/10 p-6 rounded-xl border-2 border-highlight">
+										<div class="flex items-center gap-3 mb-4">
+											<span class="text-3xl">🌐</span>
+											<h4 class="text-text-primary font-bold text-xl">External Redirect</h4>
+										</div>
+										<p class="text-text-secondary mb-4">
+											Tests redirection to an external URL (e.g., another website).
+											The server responds with a <code
+												class="bg-primary px-2 py-1 rounded">301 Moved Permanently</code>.
+										</p>
+										<a href="/external"
+											class="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-highlight to-accent hover:from-accent hover:to-highlight text-white font-bold py-3 px-6 rounded-xl transition-all transform hover:scale-105 w-full">
+											<span class="material-symbols-outlined">open_in_new</span>
+											Test External Redirect
+										</a>
+										<div class="mt-4 p-3 bg-primary rounded-lg">
+											<p class="text-text-secondary text-sm">
+												<strong class="text-highlight">Expected:</strong> Redirects to
+												<code
+													class="bg-highlight/20 px-2 py-1 rounded text-xs">https://youtu.be/xvFZjo5PgG0?si=a1Vkob7i9GhSJaOs</code>
+											</p>
+										</div>
+									</div>
+								</div>
+
+								<!-- Info Box -->
+								<div class="mt-8 p-6 bg-accent/10 rounded-xl border-2 border-accent">
+									<h4 class="text-text-primary font-bold text-lg mb-3 flex items-center gap-2">
+										<span class="material-symbols-outlined text-accent">info</span>
+										How HTTP Redirections Work
+									</h4>
+									<div class="text-text-secondary text-sm space-y-3">
+										<div class="flex items-start gap-3">
+											<span class="text-accent font-bold">1.</span>
+											<p>
+												<strong class="text-accent">Client Request:</strong>
+												Browser requests <code
+													class="bg-primary px-2 py-1 rounded">/redirect</code> or
+												<code class="bg-primary px-2 py-1 rounded">/external</code>
+											</p>
+										</div>
+										<div class="flex items-start gap-3">
+											<span class="text-accent font-bold">2.</span>
+											<p>
+												<strong class="text-accent">Server Response:</strong>
+												Webserv returns status code <code
+													class="bg-primary px-2 py-1 rounded">301</code> or
+												<code class="bg-primary px-2 py-1 rounded">301</code> with
+												<code class="bg-primary px-2 py-1 rounded">Location:</code> header
+											</p>
+										</div>
+										<div class="flex items-start gap-3">
+											<span class="text-accent font-bold">3.</span>
+											<p>
+												<strong class="text-accent">Browser Action:</strong>
+												Automatically follows the redirect to the new URL
+											</p>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+					</div>
+				<!-- GET Method Section -->
+				<div class="mb-16">
+					<h3 class="text-2xl font-bold text-accent mb-8 flex items-center gap-3">
+						<span class="text-3xl">📥</span> GET Method
+						- Test Resources
+					</h3>
+
+					<!-- Icons and Test Files -->
+					<div class="mb-8">
+						<h4 class="text-lg font-semibold text-highlight mb-4">
+							Icons & Static Files
+						</h4>
+						<div class="icon-grid">
+							<div class="icon-item">
+								<img src="/static/test/favicon.ico" alt="favicon.ico" width="32" height="32" />
+								<p class="mt-2">favicon.ico</p>
+								<a href="/static/test/favicon.ico" target="_blank"
+									class="text-accent text-xs hover:text-highlight mt-2 font-semibold">View
+									→</a>
+							</div>
+							<div class="icon-item">
+								<img src="/static/test/favicon-16x16.png" alt="favicon-16x16.png" width="16"
+									height="16" />
+								<p class="mt-2">
+									favicon-16x16.png
+								</p>
+								<a href="/static/test/favicon-16x16.png" target="_blank"
+									class="text-accent text-xs hover:text-highlight mt-2 font-semibold">View
+									→</a>
+							</div>
+							<div class="icon-item">
+								<img src="/static/test/favicon-32x32.png" alt="favicon-32x32.png" width="32"
+									height="32" />
+								<p class="mt-2">
+									favicon-32x32.png
+								</p>
+								<a href="/static/test/favicon-32x32.png" target="_blank"
+									class="text-accent text-xs hover:text-highlight mt-2 font-semibold">View
+									→</a>
+							</div>
+							<div class="icon-item">
+								<img src="/static/test/apple-touch-icon.png" alt="apple-touch-icon.png" width="60"
+									height="60" />
+								<p class="mt-2">apple-touch-icon</p>
+								<a href="/static/test/apple-touch-icon.png" target="_blank"
+									class="text-accent text-xs hover:text-highlight mt-2 font-semibold">View
+									→</a>
+							</div>
+							<div class="icon-item">
+								<img src="/static/test/android-chrome-192x192.png" alt="android-chrome-192x192.png"
+									width="48" height="48" />
+								<p class="mt-2">
+									android-chrome-192
+								</p>
+								<a href="/static/test/android-chrome-192x192.png" target="_blank"
+									class="text-accent text-xs hover:text-highlight mt-2 font-semibold">View
+									→</a>
+							</div>
+							<div class="icon-item">
+								<img src="/static/test/android-chrome-512x512.png" alt="android-chrome-512x512.png"
+									width="48" height="48" />
+								<p class="mt-2">
+									android-chrome-512
+								</p>
+								<a href="/static/test/android-chrome-512x512.png" target="_blank"
+									class="text-accent text-xs hover:text-highlight mt-2 font-semibold">View
+									→</a>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="section-divider"></div>
+
+				<!-- POST Method Section -->
+				<div class="mb-16">
+					<h3 class="text-2xl font-bold text-highlight mb-8 flex items-center gap-3">
+						<span class="text-3xl">📤</span> POST Method
+						- File Upload
+					</h3>
+					<form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data"
+						class="webserv-card">
+						<div class="grid md:grid-cols-2 gap-8">
+							<div>
+								<label for="fileInput" class="block text-text-primary font-bold text-lg mb-4">Select
+									File to
+									Upload</label>
+
+								<!-- Custom File Input -->
+								<div class="custom-file-input">
+									<input id="fileInput" name="file" type="file"
+										accept="image/*,text/*,.txt,.json,.html,.pdf" class="hidden" />
+									<label for="fileInput" class="file-input-label">
+										<span class="file-input-icon">📁</span>
+										<span id="fileInputText" class="file-input-text">Choose a file...</span>
+									</label>
+								</div>
+
+								<p class="text-text-secondary text-sm mb-6 mt-4">
+									Supported: images, text, .txt,
+									.json, .html, .pdf
+								</p>
+
+								<button id="uploadBtn" type="submit"
+									class="bg-gradient-to-r from-accent to-highlight hover:from-highlight hover:to-accent text-white font-bold py-3 px-6 rounded-xl transition-all transform hover:scale-105 w-full md:w-auto disabled:opacity-50 disabled:cursor-not-allowed">
+									<span id="uploadBtnText">📤 Upload File</span>
+								</button>
+
+								<div id="uploadResult" class="mt-4 hidden"></div>
+							</div>
+							<div>
+								<label class="block text-text-primary font-bold text-lg mb-4">Preview</label>
+								<div id="preview" class="preview">
+									<span id="previewPlaceholder" class="text-text-secondary">No file
+										selected</span>
+								</div>
+								<div id="fileInfo" class="text-text-secondary text-sm mt-4"></div>
+							</div>
+						</div>
+					</form>
+				</div>
+
+				<div class="section-divider"></div>
+
+				<!-- DELETE Method Section -->
+				<div class="mb-16">
+					<h3 class="text-2xl font-bold text-warning mb-8 flex items-center gap-3">
+						<span class="text-3xl">🗑️</span> DELETE Method - File Management
+					</h3>
+
+					<div class="webserv-card">
+						<p class="text-text-secondary mb-4">
+							Selecciona un archivo para previsualizarlo y eliminarlo del servidor.
+						</p>
+
+						<div class="grid md:grid-cols-2 gap-6">
+							<div>
+								<label for="deleteFileSelect"
+									class="block text-text-primary font-bold text-lg mb-3">Select file to
+									delete</label>
+								<div class="relative">
+									<select id="deleteFileSelect"
+										class="w-full bg-accent/10 text-text-primary border-2 border-accent rounded-xl px-4 py-3 focus:border-highlight focus:outline-none">
+										<option value="">-- No file selected --</option>
+									</select>
+								</div>
+								<p class="text-text-secondary text-sm mt-3 mb-4">Pulsa "Refresh" para recargar
+									la lista si no ves el archivo.</p>
+
+								<div class="flex gap-3">
+									<button id="refreshFilesBtn"
+										class="bg-accent/20 hover:bg-accent/40 border-2 border-accent text-text-primary font-bold py-2 px-4 rounded-lg transition-all">
+										🔄 Refresh File List
+									</button>
+									<button id="deleteSelectedBtn"
+										class="bg-gradient-to-r from-accent to-highlight hover:from-highlight hover:to-accent text-white font-bold py-2 px-4 rounded-lg transition-all disabled:opacity-50"
+										disabled>
+										🗑️ Delete Selected
+									</button>
+								</div>
+
+								<div id="deleteResult" class="mt-4 hidden" aria-live="polite"></div>
+							</div>
+
+							<div>
+								<label class="block text-text-primary font-bold text-lg mb-3">Preview</label>
+								<div id="deletePreview" class="preview">
+									<span id="deletePreviewPlaceholder" class="text-text-secondary">No file
+										selected</span>
+								</div>
+								<div id="deleteFileInfo" class="text-text-secondary text-sm mt-4"></div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Contact Section -->
+				<section class="px-4 py-20 sm:px-10 lg:px-20" id="contact">
+					<div class="max-w-4xl mx-auto text-center">
+						<div class="mb-12">
+							<h2 class="text-4xl lg:text-5xl font-black mb-4">
+								📥
+								<span class="gradient-text">Get In Touch</span>
+							</h2>
+							<p class="text-text-secondary text-xl leading-relaxed">
+								I'm currently open to new opportunities and
+								collaborations.<br />
+								Whether you have a question or just want to
+								say hi, feel free to reach out!
+							</p>
+						</div>
+						<div class="flex flex-wrap justify-center gap-6 mb-12">
+							<a href="mailto:jaferco19@gmail.com"
+								class="flex items-center gap-3 bg-accent/20 hover:bg-accent/40 border-2 border-accent hover:border-highlight text-text-primary font-bold py-4 px-8 rounded-full transition-all transform hover:scale-105">
+								<span class="material-symbols-outlined text-2xl">email</span>
+								Email Me
+							</a>
+							<a href="https://www.linkedin.com/in/javier-fernández-correa-068884200/" target="_blank"
+								class="flex items-center gap-3 bg-accent hover:bg-accent/80 text-white font-bold py-4 px-8 rounded-full transition-all transform hover:scale-105">
+								<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+									<path
+										d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+								</svg>
+								LinkedIn
+							</a>
+							<a href="https://github.com/jfercode" target="_blank"
+								class="flex items-center gap-3 bg-accent/20 hover:bg-accent/40 border-2 border-accent hover:border-highlight text-text-primary font-bold py-4 px-8 rounded-full transition-all transform hover:scale-105">
+								<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+									<path
+										d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+								</svg>
+								GitHub
+							</a>
+						</div>
+					</div>
+				</section>
+			</main>
+		</div>
+	</div>
+
+	<!-- JavaScript -->
+	<script src="script.js"></script>
+</body>
+
+</html>

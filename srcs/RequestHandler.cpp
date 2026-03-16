@@ -1,6 +1,6 @@
 #include "RequestHandler.hpp"
 
-RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), _fd(fd), _error(0), _body("")
+RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), _fd(fd), _error(0), _body(""), _isHeaderReady(false), _isBodyReady(false)
 {
 	_headerContent.isChunked = false;
 }
@@ -11,11 +11,16 @@ void RequestHandler::setClientFd(int fd) { this->_fd = fd; }
 
 int RequestHandler::getClientFd() const { return this->_fd; }
 
+bool RequestHandler::getIsHeaderReady() const { return this->_isHeaderReady; }
+
+bool RequestHandler::getIsBodyReady() const { return this->_isBodyReady; }
+
 void RequestHandler::chargeHeader()
 {
 	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
 	if (bytesRead < 0)
 	{
+		std::cerr << "bytesRead: " << bytesRead <<" fd: " << this->_fd << " _buffer: " << this->_buffer << " sizeof buffer: " << sizeof(this->_buffer) << std::endl;
 		std::cerr << "Error reading from socket: " << strerror(errno) << std::endl;
 		throw std::exception();
 	}
@@ -38,6 +43,7 @@ void RequestHandler::chargeHeader()
 			this->_request[0] = this->_header.substr(0, this->_header.find("\r\n")); // Request line
 			if (headerEnd + 4 < this->_header.size())
 				this->_body = this->_header.substr(headerEnd + 4);
+			_isHeaderReady = true;
 		}
 	}
 }
@@ -80,11 +86,13 @@ void RequestHandler::parseHeader()
 	}
 	if (token != "GET" && token != "POST" && token != "DELETE")
 	{	
+		std::cout << "que pasa\n";
 		this->_error = 405;
 		return ;
 	}
 	if (checkMethod(token, _listener.getConfig().allowed_methods) == false)
 	{
+		std::cout << "hola\n";
 		_error = 405;
 		return ;
 	}
@@ -124,7 +132,7 @@ void RequestHandler::parseHeader()
 	while (*begin == ' ')
 		++begin;
 	begin += 2;
-	while (this->_header.find("\r\n") != std::string::npos)
+	while (this->_header.find("\r\n") != std::string::npos) // revisar ete bucle
 	{
 		line = this->_header.substr(0, this->_header.find("\r\n")); 
 		/*if (wordCounter(line, ':') != 2)
@@ -167,7 +175,7 @@ void RequestHandler::parseHeader()
 	std::vector<std::string>::iterator	vend = tokens.end();
 	std::stringstream					ss;
 	size_t								num;
-	for (; vegin != vend; ++vegin)
+	for (; vegin != vend; ++vegin) // revisar este bucle
 	{
 		if ((vegin + 1) != vend && (vegin + 2) != vend && strToLower(*vegin) == "content-lenght")
 		{
@@ -216,6 +224,11 @@ void	RequestHandler::setPath()
 				std::cout << "it->path: " << it->path << std::endl;
 				if (checkMethod(_headerContent.method, it->allowed_methods) == false)
 				{
+					std::cout << "method: |" << _headerContent.method << " size methods: " << it->allowed_methods.size() << "|\n";
+					for (size_t i = 0; i < it->allowed_methods.size(); ++i)
+					{
+						std::cout << it->allowed_methods[i] << std::endl;
+					}
 					_error = 405;
 					return ;
 				}

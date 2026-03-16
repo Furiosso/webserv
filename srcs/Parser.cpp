@@ -573,7 +573,7 @@ void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationCo
     }
     else
     {
-        std::cerr << "Hola\n";
+        std::cerr << "root\n";
         throw std::exception();
     }
 	++it;
@@ -584,6 +584,7 @@ void	Parser::indexLocParser(std::vector<std::string>::iterator& it, LocationConf
 	std::string			str;
 
 	++it;
+	loc.index.clear();
 	while (*it != ";")
 	{
 		str = *it;
@@ -600,11 +601,16 @@ void	Parser::cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig
 
 	++it;
     str = *it;
+	loc.cgi.clear();
     if (*(it + 2) != ";" || !isCgiWord(str))
+	{
+		std::cout << "CGI 1\n";
         throw std::exception();
+	}
     ++it;
     if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
     {
+		std::cout << "CGI 2\n";
         throw std::exception();
     }
 	loc.cgi.insert(std::pair<std::string, std::string>(*(it - 1), *it));
@@ -614,10 +620,16 @@ void	Parser::cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig
 void    Parser::autoindexLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
 {
     if (*(it + 2) != ";")
+	{
+		std::cout << "AUTOINDEX PARSER 1\n";
         throw std::exception();
+	}
     ++it;
     if (*it != "on" && *it != "off")
+	{
+		std::cout << "AUTOINDEX PARSER 2\n";
         throw std::exception();
+	}
     if (*it == "on")
         loc.autoindex = true;
     else
@@ -631,6 +643,7 @@ void	Parser::allowedLocParser(std::vector<std::string>::iterator& it, LocationCo
     std::vector<std::string>    methods;
 
 	++it;
+	loc.allowed_methods.clear();
 	while (*it != ";")
 	{
 		if (*it != "GET" && *it != "POST" && *it != "DELETE")
@@ -649,6 +662,7 @@ void    Parser::errorPageLocParser(std::vector<std::string>::iterator& it, Locat
 	std::string	ovr;
 
     ++it;
+	loc.error_pages.clear();
     while (*it != ";")
     {
         pos = getTypeOfItem(*it);
@@ -681,6 +695,33 @@ int Parser::getLocationState(int prev, int pos)
     return (matrix[prev][pos]);
 }
 
+void	Parser::cmbsLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
+{
+	std::stringstream   parse;
+    long long           n;
+    char                c;
+
+    if (*(it + 2) != ";")
+        throw std::exception();
+    ++it;
+    if (checkclientmaxbodysize(*it) == false)
+        throw std::exception();
+    parse << *it;
+    parse >> n;
+    parse >> c;
+    if (n < 0 || n > std::numeric_limits<int>::max())
+	{
+        throw std::exception();
+	}
+	if (c == 'K' || c == 'k')
+		n *= 1024;
+	if (c == 'M' || c == 'm')
+		n *= 1048576;
+	if (c == 'G' || c == 'g')
+		n *= 1073741824;
+    loc.client_max_body_size = n;
+}
+
 void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& server)
 {
     int prev = 0;
@@ -701,9 +742,16 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
     }
 	loc.path = *(it - 1);
 	++it;
-    loc.isRoot = false;
-    loc.isAlias = false;
     loc.isAutoindex = false;
+	loc.isRoot = false;
+	loc.isAlias = false;
+	loc.allowed_methods = server.getConfig().allowed_methods;
+	loc.index = server.getConfig().index;
+	loc.cgi = server.getConfig().cgi;
+	loc.autoindex = server.getConfig().autoindex;
+	loc.error_pages = server.getConfig().error_pages;
+	loc.isAutoindex = server.getConfig().isAutoindex;
+	loc.client_max_body_size =  server.getConfig().client_max_body_size;
 	while (*it != "}")
 	{
 		if (*it == "root")
@@ -720,11 +768,20 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
 			allowedLocParser(it, loc);
 		else if (*it == "error_page")
 			errorPageLocParser(it, loc);
+		else if (*it == "client_max_body_size")
+			cmbsLocParser(it, loc);
 		else if (*it == ";")
 			++it;
 		else
 			throw std::exception();
     }
+	if (loc.root.empty() == true)
+	{
+		std::cout << loc.root << std::endl;
+		loc.root = server.getConfig().root;
+		loc.isRoot = server.getConfig().isRoot;
+		loc.isAlias = server.getConfig().isAlias;
+	}
 	server.addLocation(loc);
 }
 
@@ -800,6 +857,18 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
             this->rootParser(it, servers[i], 0);
         if (*it == "alias")
             this->rootParser(it, servers[i], 1);
+		if (*it == "location")
+		{
+			while (*it != "}")
+				++it;
+		}
+    }
+    it = _tokens.begin();
+	i = -1;
+    for (; it != end; ++it)
+    {
+		if (*it == "server")
+			++i;
         if (*it == "location")
             this->locationParser(it, servers[i]);
     }

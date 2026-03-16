@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta content="width=device-width, initial-scale=1.0" name="viewport" />
+		<title>Error Page</title>
+		<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+		<link
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&amp;display=swap"
+			rel="stylesheet"
+		/>
+		<link
+			href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
+			rel="stylesheet"
+		/>
+		<script id="tailwind-config">
+			tailwind.config = {
+				darkMode: "class",
+				theme: {
+					extend: {
+						colors: {
+							primary: "#3b82f6",
+							"background-light": "#f7faff",
+							"background-dark": "#111827",
+						},
+						fontFamily: {
+							display: ["Inter", "sans-serif"],
+						},
+						borderRadius: {
+							DEFAULT: "0.25rem",
+							lg: "0.5rem",
+							xl: "0.75rem",
+							full: "9999px",
+						},
+						animation: {
+							"fade-in": "fadeIn 0.5s ease-out forwards",
+						},
+						keyframes: {
+							fadeIn: {
+								"0%": {
+									opacity: "0",
+									transform: "translateY(10px)",
+								},
+								"100%": {
+									opacity: "1",
+									transform: "translateY(0)",
+								},
+							},
+						},
+					},
+				},
+			};
+		</script>
+		<style>
+			body {
+				font-family: "Inter", sans-serif;
+			}
+		</style>
+	</head>
+	<body class="bg-background-light dark:bg-background-dark font-display">
+		<div
+			class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden"
+		>
+			<div class="layout-container flex h-full grow flex-col">
+				<div
+					class="flex flex-1 items-center justify-center p-4 sm:p-6 md:p-8"
+				>
+					<div
+						class="layout-content-container flex flex-col max-w-xl flex-1 text-center items-center"
+					>
+						<h1
+							class="text-primary tracking-light text-6xl sm:text-7xl md:text-8xl font-black leading-tight animate-fade-in [animation-delay:0.1s]"
+						>
+							413
+						</h1>
+						<div
+							class="flex flex-col gap-3 pt-6 pb-8 animate-fade-in [animation-delay:0.3s]"
+						>
+							<p
+								class="text-slate-900 dark:text-white text-3xl sm:text-4xl font-bold leading-tight tracking-tight"
+							>
+								Oops! Payload Too Large
+							</p>
+							<p
+								class="text-slate-600 dark:text-slate-400 text-base font-normal leading-normal max-w-md"
+							>
+								Sorry, the payload you sent is too large. Please
+								try reducing the size and try again or return to
+								the homepage.
+							</p>
+						</div>
+						<div
+							class="flex justify-center animate-fade-in [animation-delay:0.5s]"
+						>
+							<a
+								class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-6 bg-primary text-white text-base font-bold leading-normal tracking-wide shadow-lg shadow-primary/30 transition-all duration-300 ease-in-out hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/40 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background-light dark:focus:ring-offset-background-dark"
+								href="/"
+							>
+								<span class="truncate">Return to Home</span>
+							</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</body>
+</html>

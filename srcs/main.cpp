@@ -155,7 +155,27 @@ int main (int argc, char** argv, char** env)
                     }
 					else
 					{
+						// petición entrante en un cliente existente: leer/parsear
 						//manageRequest(pollfds[i].fd);
+						//bool handled = false;
+						for (size_t j = 0; j < clients.size(); ++j)
+						{
+							//Imlementar en RequestHandler:
+							// - handleRead(): recv() hasta terminar header/body o EGAIN
+							// - prepareResponse(): preparar datos a enviar
+							if (clients[j].getClientFd() == fd)
+                            {
+                                if (clients[j].getIsHeaderReady() == false)
+                                    clients[j].chargeHeader();
+                                //else
+                                //{
+                                    //clients[j].chargeBody();
+                                    //if (clients[j].getIsBodyReady() == true)
+                                    //    pollfds[i].events = POLLOUT;
+                                //}
+								break ;
+                            }
+						}
 					}
 				}
 				if (pollfds[i].revents & POLLOUT)
@@ -164,8 +184,28 @@ int main (int argc, char** argv, char** env)
 					{
 						if (clients[j].getClientFd() == pollfds[i].fd)
 						{
-							//sendResponse(pollfds[i].fd);
-							break;
+							// Implementar en RequestHandler:
+                            // - handleWrite(): write() hasta terminar o EAGAIN
+                            // - isFinished(): true si respuesta enviada y cerrar según keep-alive
+							/*clients[j].handlewrite();
+							if (clients[j].isFinished())
+							{
+								clients[j].closeClient();
+								close(pollfds[i].fd);
+								std::swap(clients[j], clients.back());
+								clients.pop_back();
+								std::swap(pollfds[i], pollfds.back());
+								pollfds.pop_back();
+								if (i > 0)
+									--i;
+							}
+							else
+							{
+								// si sigue con keep-alive, volver a escuchar lecturas
+                                pollfds[i].events &= ~POLLOUT;
+                                pollfds[i].events |= POLLIN;
+							}
+							break;*/
 						}
 					}
 				}

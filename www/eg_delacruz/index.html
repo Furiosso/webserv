@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta content="width=device-width, initial-scale=1.0" name="viewport" />
+		<title>Gerardo De La Cruz - Portfolio</title>
+		<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+		<link
+			href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+			rel="stylesheet"
+		/>
+		<link
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&amp;display=swap"
+			rel="stylesheet"
+		/>
+		<link rel="icon" type="image/x-icon" href="./favicon.ico" />
+		<script>
+			tailwind.config = {
+				darkMode: "class",
+				theme: {
+					extend: {
+						colors: {
+							primary: "#1173d4",
+							"background-light": "#f6f7f8",
+							"background-dark": "#101922",
+						},
+						fontFamily: {
+							display: ["Inter", "sans-serif"],
+						},
+						borderRadius: {
+							DEFAULT: "0.25rem",
+							lg: "0.5rem",
+							xl: "0.75rem",
+							full: "9999px",
+						},
+					},
+				},
+			};
+		</script>
+		<style>
+			.material-symbols-outlined {
+				font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0,
+					"opsz" 24;
+			}
+		</style>
+	</head>
+	<body class="bg-background-light dark:bg-background-dark font-display">
+		<div
+			class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden"
+		>
+			<div class="layout-container flex h-full grow flex-col">
+				<div
+					class="px-4 md:px-10 lg:px-40 flex flex-1 justify-center py-5"
+				>
+					<div
+						class="layout-content-container flex flex-col max-w-[960px] flex-1"
+					>
+						<!-- /////////////////////////// -->
+						<!-- //       Header          // -->
+						<!-- /////////////////////////// -->
+						<header
+							class="flex items-center justify-between whitespace-nowrap border-b border-solid border-b-white/10 px-4 sm:px-10 py-3"
+						>
+							<div class="flex items-center gap-4 text-white">
+								<img
+									alt="Logo"
+									class="w-8 h-8"
+									src="./static/Logo.svg"
+								/>
+								<h2
+									class="text-white text-lg font-bold leading-tight tracking-[-0.015em]"
+								>
+									Gerardo De La Cruz
+								</h2>
+							</div>
+							<div class="flex">
+								<a
+									href="http://127.0.0.1:8001/index.html"
+									class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/90 transition-colors mx-2"
+								>
+									<span class="truncate">
+										<div class="mr-2">jfercode</div>
+									</span>
+									<span
+										class="material-symbols-outlined text-base"
+										>open_in_new</span
+									>
+								</a>
+								<a
+									href="/protected"
+									class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/90 transition-colors mx-2"
+								>
+									<span class="truncate">
+										Protected area
+									</span>
+								</a>
+								<a
+									href="/cgi-bin"
+									class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/90 transition-colors mx-2"
+								>
+									<span class="truncate"> CGIs area </span>
+								</a>
+								<a
+									href="/login"
+									class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/90 transition-colors mx-2"
+								>
+									<span class="truncate"> Login </span>
+								</a>
+							</div>
+						</header>
+						<main class="flex-1">
+							<!-- /////////////////////////// -->
+							<!-- //        Hero           // -->
+							<!-- /////////////////////////// -->
+							<section class="py-8">
+								<div class="flex p-4 @container">
+									<div
+										class="flex w-full flex-col gap-6 items-center"
+									>
+										<div
+											class="flex gap-6 flex-col items-center"
+										>
+											<div
+												class="bg-center bg-no-repeat aspect-square bg-cover rounded-full min-h-32 w-32"
+												data-alt="A professional headshot of John Doe"
+												style="
+													background-image: url('./static/profile.jpg');
+												"
+											></div>
+											<div
+												class="flex flex-col items-center justify-center gap-2"
+											>
+												<h1
+													class="text-white text-4xl md:text-5xl font-bold leading-tight tracking-tighter text-center"
+												>
+													Gerardo De La Cruz
+												</h1>
+												<p
+													class="text-primary text-xl md:text-2xl font-medium leading-normal text-center"
+												>
+													Full Stack Developer
+												</p>
+												<p
+													class="text-[#92adc9] text-base font-normal leading-normal text-center max-w-md mt-2"
+												>
+													Passionate developer and a
+													42 student, creating
+													innovative solutions and
+													building beautiful,
+													functional websites and
+													applications.
+												</p>
+											</div>
+										</div>
+									</div>
+								</div>
+							</section>
+							<section class="py-8">
+								<h2
+									class="text-white text-3xl font-bold leading-tight tracking-tighter px-4 pb-6 pt-5 text-center"
+								>
+									Technologies I Work With
+								</h2>
+								<div
+									class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-6 p-4"
+								>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="C Icon"
+												class="w-14 h-14"
+												src="./static/skills/c.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											C
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="c++ Icon"
+												class="w-14 h-14"
+												src="./static/skills/c_plus_plus.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											C++
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="JavaScript Icon"
+												class="w-14 h-14"
+												src="./static/skills/js.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											JavaScript
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="TypeScript Icon"
+												class="w-14 h-14"
+												src="./static/skills/ts.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											TypeScript
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="Git Icon"
+												class="w-14 h-14"
+												src="./static/skills/git.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											Git
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="GitHub Icon"
+												class="w-14 h-14"
+												src="./static/skills/github.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											GitHub
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="HTML Icon"
+												class="w-14 h-14"
+												src="./static/skills/html.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											HTML5
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="Css Icon"
+												class="w-14 h-14"
+												src="./static/skills/css.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											CSS3
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="React Icon"
+												class="w-14 h-14"
+												src="./static/skills/react.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											React
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="Redux Icon"
+												class="w-14 h-14"
+												src="./static/skills/redux.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											Redux
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="Next Icon"
+												class="w-14 h-14"
+												src="./static/skills/next.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											Next.js
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="Sass Icon"
+												class="w-14 h-14"
+												src="./static/skills/sass.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											Sass
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="Tailwind Icon"
+												class="w-14 h-14"
+												src="./static/skills/tailwind_icon.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											Tailwind CSS
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="Node Icon"
+												class="w-14 h-14"
+												src="./static/skills/node.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											Node.js
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="Mongo Icon"
+												class="w-14 h-14"
+												src="./static/skills/mongo.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											MongoDB
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="SQL Icon"
+												class="w-14 h-14"
+												src="./static/skills/sql.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											SQL
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="Figma Icon"
+												class="w-14 h-14"
+												src="./static/skills/figma.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											Figma
+										</p>
+									</div>
+									<div
+										class="flex flex-col gap-3 items-center text-center pb-3 group"
+									>
+										<div
+											class="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-105"
+										>
+											<img
+												alt="Scrum Icon"
+												class="w-14 h-14"
+												src="./static/skills/scrum.svg"
+											/>
+										</div>
+										<p
+											class="text-white text-base font-medium leading-normal"
+										>
+											Scrum
+										</p>
+									</div>
+								</div>
+							</section>
+						</main>
+					</div>
+				</div>
+			</div>
+		</div>
+	</body>
+</html>

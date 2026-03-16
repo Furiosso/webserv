@@ -113,7 +113,8 @@ class Parser
 		void									allowedLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
 		void									errorPageLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
         void                                    locationParser(std::vector<std::string>::iterator& it, Server& server); //not
-        int		                                getServerNameState(int prev, int pos);
+        void									cmbsLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
+		int		                                getServerNameState(int prev, int pos);
         bool                                    checkclientmaxbodysize(std::string t);
         bool                                    check_ipv4(std::string t);
         bool                                    check_port(std::string t);
