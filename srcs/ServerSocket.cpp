@@ -44,7 +44,10 @@
 */
 /*int	ServerSocket::get_fd(){ return _fd; }*/
 
-ServerSocket::~ServerSocket() {}
+ServerSocket::~ServerSocket()
+{
+	closeAll();
+}
 
 ServerSocket::ServerSocket()
 {}

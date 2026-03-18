@@ -98,6 +98,7 @@ class Parser
         std::multimap<std::string, std::string> _listens;
         std::vector<int>                        _lflags;
         int                                     _serverCounter;
+		std::ifstream							_infile;
         void                                    listenParser(std::vector<std::string>::iterator& it, Server& server); //done
         void                                    autoindexParser(std::vector<std::string>::iterator& it, Server& server); //done
         void                                    allowedParser(std::vector<std::string>::iterator& it, Server& server); //done

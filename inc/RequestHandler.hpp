@@ -15,6 +15,18 @@ struct HeaderContent
 	std::string	protocol;
 };
 
+struct CgiState
+{
+    pid_t pid;
+    int in_fd;    // parent writes -> child stdin
+    int out_fd;   // parent reads  <- child stdout
+    std::string write_buf;
+    size_t write_pos;
+    std::string read_buf;
+    bool in_closed;
+    bool out_closed;
+};
+
 class RequestHandler
 {
 private:
@@ -28,20 +40,29 @@ private:
 	bool					_isHeaderReady;
 	bool					_isBodyReady;
 	struct HeaderContent	_headerContent;
+	struct CgiState			_cgi;
 public:
 	RequestHandler(Server& listener, int fd);
 	~RequestHandler();
-	void	chargeHeader();
-	void	chargeBody();
-	void	parseHeader();
-	void	setClientFd(int fd);
-	int		getClientFd() const;
-	bool	getIsHeaderReady() const;
-	bool	getIsBodyReady() const;
-	void	setPath();
-	bool	checkMethod(std::string& method, const std::vector<std::string>& vec);
-	void	checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex, const std::string& root);
+	void		chargeHeader();
+	void		chargeBody();
+	void		checkContentLength(size_t num);
+	void		parseHeader();
+	void		setClientFd(int fd);
+	int			getClientFd() const;
+	bool		getIsHeaderReady() const;
+	bool		getIsBodyReady() const;
+	void		setPath();
+	bool		checkMethod(std::string& method, const std::vector<std::string>& vec);
+	void		checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex, const std::string& root);
+	void		handleCgiIfNeeded();
 	std::string	joinPath(const std::string& a, const std::string& b);
+	bool		startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter);
+    void		handleCgiFdEvent(int fd, short revents);
+    void		finalizeCgiIfDone();
+    int			getCgiInFd() const;
+    int			getCgiOutFd() const;
+    bool		isCgiRunning() const;
 };
 
 

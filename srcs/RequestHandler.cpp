@@ -5,7 +5,15 @@ RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), 
 	_headerContent.isChunked = false;
 }
 
-RequestHandler::~RequestHandler() {}
+RequestHandler::~RequestHandler()
+{
+	_cgi.pid = -1;
+	_cgi.in_fd = -1;
+	_cgi.out_fd = -1;
+	_cgi.write_pos = 0;
+	_cgi.in_closed = false;
+	_cgi.out_closed = false;
+}
 
 void RequestHandler::setClientFd(int fd) { this->_fd = fd; }
 
@@ -22,10 +30,16 @@ void RequestHandler::chargeHeader()
 	{
 		std::cerr << "bytesRead: " << bytesRead <<" fd: " << this->_fd << " _buffer: " << this->_buffer << " sizeof buffer: " << sizeof(this->_buffer) << std::endl;
 		std::cerr << "Error reading from socket: " << strerror(errno) << std::endl;
-		throw std::exception();
+		// Simplemente salir y esperar próxima notificación para este fd.
+        return;
 	}
 	else if (bytesRead == 0)
-		throw std::exception(); // cambiarlo por otra cosa
+	{
+		// cliente cerró la conexión: marcar error para que el main limpie
+        this->_error = 0; // o usa un flag específico; main debe detectar bytes==0 y cerrar
+        // marca header/body como no listos y deja que main elimine este RequestHandler
+        return;
+	}
 	else
 	{
 		this->_buffer[bytesRead] = '\0'; // Null-terminate the buffer
@@ -34,6 +48,8 @@ void RequestHandler::chargeHeader()
 		if (this->_header.find("\r\n\r\n") != std::string::npos) // End of headers
 		{
 			size_t headerEnd = this->_header.find("\r\n\r\n");
+			if (headerEnd + 4 < this->_header.size())
+				this->_body = this->_header.substr(headerEnd + 4);
 			this->_header = this->_header.substr(0, headerEnd);
 			this->parseHeader();
 			std::cout << this->_header << std::endl;
@@ -41,8 +57,6 @@ void RequestHandler::chargeHeader()
 			std::cout << "error: " << this->_error << std::endl;
 			std::cout << "header path: " << this->_headerContent.path << std::endl;
 			this->_request[0] = this->_header.substr(0, this->_header.find("\r\n")); // Request line
-			if (headerEnd + 4 < this->_header.size())
-				this->_body = this->_header.substr(headerEnd + 4);
 			_isHeaderReady = true;
 		}
 	}
@@ -53,6 +67,104 @@ bool	RequestHandler::checkMethod(std::string& method, const std::vector<std::str
 	if (std::find(vec.begin(), vec.end(), method) == vec.end())
 		return false;
 	return true; 
+}
+
+static bool setNonBlocking(int fd)
+{
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) 
+		return false;
+    flags |= O_NONBLOCK;
+    return (fcntl(fd, F_SETFL, flags) != -1);
+}
+
+bool RequestHandler::startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter)
+{
+	int	inpipe[2];
+	int	outpipe[2];
+	if (pipe(inpipe) == -1)
+		return false;
+	if (pipe(outpipe) == -1)
+	{
+		close(inpipe[0]);
+		close(inpipe[1]);
+		return false;
+	}
+	pid_t pid = fork();
+	if (pid < 0)
+	{
+		close(inpipe[0]);
+		close(inpipe[1]);
+		close(outpipe[0]);
+		close(outpipe[1]);
+		return false;
+	}
+	else if (pid == 0)
+	{
+		dup2(inpipe[0], STDERR_FILENO);
+		dup2(outpipe[1], STDOUT_FILENO);
+		close(inpipe[0]);
+		close(inpipe[1]);
+		close(outpipe[0]);
+		close(outpipe[1]);
+		char *argv[3];
+		argv[0] = const_cast<char*>(interpreter.c_str());
+		argv[1] = const_cast<char*>(scriptPath.c_str());
+		argv[2] = NULL;
+		execve(argv[0], argv, NULL);
+		_exit(127);
+	}
+	else
+	{
+		close(inpipe[0]);
+		close(outpipe[1]);
+		_cgi.pid = pid;
+		_cgi.in_fd = inpipe[1];
+		_cgi.out_fd = outpipe[0];
+		_cgi.write_buf = this->_body;
+		_cgi.write_pos = 0;
+		_cgi.read_buf.clear();
+		_cgi.in_closed = false;
+		_cgi.out_closed = false;
+		setNonBlocking(_cgi.in_fd);
+		setNonBlocking(_cgi.out_fd);
+		return true;
+	}
+	return false;
+}
+
+int RequestHandler::getCgiInFd() const
+{
+	return _cgi.in_fd;
+}
+
+int RequestHandler::getCgiOutFd() const
+{
+	return _cgi.out_fd;
+}
+
+bool RequestHandler::isCgiRunning() const
+{
+	return (_cgi.pid > 0);
+}
+
+void RequestHandler::handleCgiFdEvent(int fd, short revents)
+{
+	(void)fd;
+	(void)revents;
+}
+
+void RequestHandler::finalizeCgiIfDone()
+{}
+
+void	RequestHandler::handleCgiIfNeeded()
+{
+	if (checkExtention(this->_headerContent.path, ".py"))
+	{
+		std::string interp = "/usr/bin/python3";
+		if (!startCgiNonBlocking(this->_headerContent.path, interp))
+			_error = 500;
+	}
 }
 
 void RequestHandler::parseHeader()
@@ -114,8 +226,9 @@ void RequestHandler::parseHeader()
 		return ;
 	}
 	this->_headerContent.path = token;
-	if (checkExtention(this->_headerContent.path, ".py") == true)
-		;//desviar el flujo hacia el gestor de cgi
+	handleCgiIfNeeded();
+	/*if (checkExtention(this->_headerContent.path, ".py") == true)
+		;//desviar el flujo hacia el gestor de cgi*/
 	std::cout << "path: " << token << std::endl;
 	token = "";
 	while (*begin == ' ')
@@ -135,12 +248,12 @@ void RequestHandler::parseHeader()
 	while (this->_header.find("\r\n") != std::string::npos) // revisar ete bucle
 	{
 		line = this->_header.substr(0, this->_header.find("\r\n")); 
-		/*if (wordCounter(line, ':') != 2)
+		if (wordCounter(line, ':') != 2 && line.substr(0, 4) != "Host")
 		{
 			std::cout << "line: " << line << std::endl;
 			this->_error = 400;
 			return ;
-		}*/
+		}
 		begin = line.begin();
 		end = line.end();
 		while (begin != end)
@@ -188,6 +301,7 @@ void RequestHandler::parseHeader()
 			{
 				ss << *(vegin + 2);
 				ss >> num;
+				checkContentLength(num);
 				this->_headerContent.contentLenght = num;
 			}
 		}
@@ -202,6 +316,32 @@ void RequestHandler::parseHeader()
 				this->_headerContent.isChunked = true;
 		}
 	}
+}
+
+void	RequestHandler::checkContentLength(size_t num)
+{
+	const std::vector<LocationConfig>& locations = _listener.getConfig().locations;
+
+	if (!locations.empty())
+	{
+		std::vector<LocationConfig>::const_iterator it = locations.begin();
+		std::vector<LocationConfig>::const_iterator end = locations.end();
+		
+		for (; it != end; ++it)
+		{
+			if (it->path.size() <= _headerContent.path.size()
+				&& _headerContent.path.compare(0, it->path.size(), it->path) == 0
+				&& it->client_max_body_size != 0
+				&& num > it->client_max_body_size)
+			{
+				this->_error = 413;
+				return ;
+			}
+		}
+	}
+	if (this->_listener.getConfig().client_max_body_size != 0
+		&& num > this->_listener.getConfig().client_max_body_size)
+		this->_error = 413;
 }
 
 void	RequestHandler::setPath()
@@ -399,4 +539,40 @@ std::string	RequestHandler::joinPath(const std::string& a, const std::string& b)
     	return a + b;
 	}
 	return a + "/" + b;
+}
+
+void	RequestHandler::chargeBody()
+{
+	if (this->_headerContent.isChunked == true)
+	{
+		//chunkManagement();
+		return ;
+	}
+	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
+	if (bytesRead < 0)
+	{
+		std::cerr << "bytesRead: " << bytesRead <<" fd: " << this->_fd << " _buffer: " << this->_buffer << " sizeof buffer: " << sizeof(this->_buffer) << std::endl;
+		std::cerr << "Error reading from socket: " << strerror(errno) << std::endl;
+		// Simplemente salir y esperar próxima notificación para este fd.
+        return;
+	}
+	else if (bytesRead == 0)
+	{
+		// cliente cerró la conexión: marcar error para que el main limpie
+        this->_error = 0; // o usa un flag específico; main debe detectar bytes==0 y cerrar
+        // marca header/body como no listos y deja que main elimine este RequestHandler
+        return;
+	}
+	else
+	{
+		this->_buffer[bytesRead] = '\0'; // Null-terminate the buffer
+		this->_body += this->_buffer; // Append to the request string
+		if (this->_headerContent.contentLenght <= this->_body.size())
+		{
+			if (this->_body.size > this->_headerContent.contentLenght)
+				this->_body = this->_body.substr(0, this->_headerContent.contentLenght);
+			this->_isBodyReady = true;
+		}
+		ft_bzero(this->_buffer, sizeof(this->_buffer));
+	}
 }

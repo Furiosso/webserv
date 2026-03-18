@@ -826,16 +826,17 @@ void	Parser::checkServerNames(std::vector<Server>& servers)
 
 Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCounter(0)
 {
-	std::ifstream   config_file(in_file);
+	_infile.open(in_file);
+	//std::ifstream   config_file(in_file);
     std::vector<std::string>::iterator  it;
     std::vector<std::string>::iterator  end;
 
-    if (!config_file.is_open())
+    if (!_infile.is_open())
         throw std::runtime_error("Could not open config file\n");
-    this->rmComments(config_file);
+    this->rmComments(_infile);
     if (this->tokenize() == 1)
     {
-        config_file.close();
+        _infile.close();
         throw std::exception();
     }
     if (this->chooseState(this->_tokens))
@@ -892,7 +893,7 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
     }
     checkListen(servers);
 	checkServerNames(servers);
-    config_file.close();
+    _infile.close();
 }
 
 Parser::~Parser()
@@ -900,6 +901,8 @@ Parser::~Parser()
     _tokens.clear();
     _listens.clear();
     _lflags.clear();
+	 if (_infile.is_open())
+        _infile.close();
 }
 
 int    Parser::tokenize()
