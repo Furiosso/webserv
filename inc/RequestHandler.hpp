@@ -5,11 +5,13 @@
 # include <algorithm>
 # include <sstream>
 # include <sys/stat.h>
+# include <sys/types.h>
+# include <sys/wait.h>
 
 struct HeaderContent
 {
 	std::string	method;
-	size_t		contentLenght;
+	size_t		ContentLength;
 	bool		isChunked;
 	std::string path;
 	std::string	protocol;

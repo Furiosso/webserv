@@ -3,16 +3,38 @@
 RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), _fd(fd), _error(0), _body(""), _isHeaderReady(false), _isBodyReady(false)
 {
 	_headerContent.isChunked = false;
-}
-
-RequestHandler::~RequestHandler()
-{
 	_cgi.pid = -1;
 	_cgi.in_fd = -1;
 	_cgi.out_fd = -1;
 	_cgi.write_pos = 0;
 	_cgi.in_closed = false;
 	_cgi.out_closed = false;
+}
+
+RequestHandler::~RequestHandler()
+{
+	if (_cgi.in_fd >= 0)
+	{
+		close(_cgi.in_fd);
+		_cgi.in_fd = -1;
+	}
+    if (_cgi.out_fd >= 0)
+	{
+		close(_cgi.out_fd);
+		_cgi.out_fd = -1;
+	}
+    if (_cgi.pid > 0)
+    {
+        int status = 0;
+        pid_t w = waitpid(_cgi.pid, &status, WNOHANG);
+        if (w == 0)
+        {
+            // child aún corre: intentar kill
+            kill(_cgi.pid, SIGKILL);
+            waitpid(_cgi.pid, &status, 0);
+        }
+        _cgi.pid = -1;
+    }
 }
 
 void RequestHandler::setClientFd(int fd) { this->_fd = fd; }
@@ -44,21 +66,21 @@ void RequestHandler::chargeHeader()
 	{
 		this->_buffer[bytesRead] = '\0'; // Null-terminate the buffer
 		this->_header += this->_buffer; // Append to the request string
-		ft_bzero(this->_buffer, sizeof(this->_buffer));
 		if (this->_header.find("\r\n\r\n") != std::string::npos) // End of headers
 		{
 			size_t headerEnd = this->_header.find("\r\n\r\n");
-			if (headerEnd + 4 < this->_header.size())
-				this->_body = this->_header.substr(headerEnd + 4);
 			this->_header = this->_header.substr(0, headerEnd);
 			this->parseHeader();
 			std::cout << this->_header << std::endl;
 			this->setPath();
 			std::cout << "error: " << this->_error << std::endl;
 			std::cout << "header path: " << this->_headerContent.path << std::endl;
+			if(headerEnd + 4 < this->_header.size() && this->_headerContent.method == "POST")
+				this->_body = this->_header.substr(headerEnd + 4);
 			this->_request[0] = this->_header.substr(0, this->_header.find("\r\n")); // Request line
 			_isHeaderReady = true;
 		}
+		ft_bzero(this->_buffer, sizeof(this->_buffer));
 	}
 }
 
@@ -101,7 +123,7 @@ bool RequestHandler::startCgiNonBlocking(const std::string& scriptPath, const st
 	}
 	else if (pid == 0)
 	{
-		dup2(inpipe[0], STDERR_FILENO);
+		dup2(inpipe[0], STDIN_FILENO);
 		dup2(outpipe[1], STDOUT_FILENO);
 		close(inpipe[0]);
 		close(inpipe[1]);
@@ -150,12 +172,158 @@ bool RequestHandler::isCgiRunning() const
 
 void RequestHandler::handleCgiFdEvent(int fd, short revents)
 {
-	(void)fd;
-	(void)revents;
+	if (!isCgiRunning())
+		return ;
+	if (revents & (POLLHUP | POLLERR | POLLNVAL))
+    {
+        if (fd == _cgi.in_fd && _cgi.in_fd >= 0)
+        {
+            close(_cgi.in_fd);
+            _cgi.in_fd = -1;
+            _cgi.in_closed = true;
+        }
+        if (fd == _cgi.out_fd && _cgi.out_fd >= 0)
+        {
+            close(_cgi.out_fd);
+            _cgi.out_fd = -1;
+            _cgi.out_closed = true;
+        }
+        finalizeCgiIfDone();
+        return;
+    }
+	// escribit a stdin del CGI cuando POLLOUT
+	if (fd == _cgi.in_fd && (revents & POLLOUT))
+	{
+		while (_cgi.write_pos < _cgi.write_buf.size()) //si peta o algo cambiarlo por un if
+		{
+			const char* buf = _cgi.write_buf.c_str() + _cgi.write_pos;
+			size_t to_write = _cgi.write_buf.size() - _cgi.write_pos;
+			ssize_t	w = write(_cgi.in_fd, buf, to_write);
+			if (w > 0)
+				_cgi.write_pos += (size_t)w;
+			else
+			{
+				close(_cgi.in_fd);
+				_cgi.in_fd = -1;
+				_cgi.in_closed = true;
+				break ;
+			}
+		}
+		if(_cgi.write_pos >= _cgi.write_buf.size() && _cgi.in_fd >= 0)
+		{
+			close(_cgi.in_fd);
+			_cgi.in_fd = -1;
+			_cgi.in_closed = true;
+		}
+	}
+	// leer stdout del CGI cuando POLLIN
+	if (fd == _cgi.out_fd && (revents & POLLIN))
+	{
+		char buf[4096];
+		ssize_t r = read(_cgi.out_fd, buf, sizeof(buf));
+		for (;;)
+		{
+			if (r > 0)
+				_cgi.read_buf.append(buf, r);
+			else if (r == 0)
+			{
+				 // EOF: child cerró stdout
+				close(_cgi.out_fd);
+				_cgi.out_fd = -1;
+				_cgi.out_closed = true;
+			}
+			else
+			{
+				//error en read
+				if (_cgi.out_fd >= 0)
+					close(_cgi.out_fd);
+				_cgi.out_fd = -1;
+				_cgi.out_closed = true;
+			}
+			break ;
+		}
+	}
+	finalizeCgiIfDone();
 }
 
 void RequestHandler::finalizeCgiIfDone()
-{}
+{
+	if (!isCgiRunning())
+		return ;
+	if (!_cgi.out_closed)
+		return ;
+	int	status = 0;
+	pid_t w = waitpid(_cgi.pid, &status, WNOHANG);
+	if (w == 0)
+		return ;
+	_cgi.pid = -1;
+	std::string &out = _cgi.read_buf;
+	size_t sep = out.find("\r\n\r\n");
+	std::string cgiHeaders;
+	std::string cgiBody;
+	if (sep == std::string::npos)
+		cgiBody = out;
+	else
+	{
+		cgiHeaders = out.substr(0, sep);
+		cgiBody = out.substr(sep + 4);
+	}
+	int cgiStatus = 200;
+	if (!cgiHeaders.empty())
+	{
+		size_t pos = 0;
+		while (pos < cgiHeaders.size())
+		{
+			size_t lineEnd = cgiHeaders.find("\r\n", pos);
+            if (lineEnd == std::string::npos)
+                lineEnd = cgiHeaders.size();
+            std::string line = cgiHeaders.substr(pos, lineEnd - pos);
+            // trim leading spaces
+            size_t i = 0;
+            while (i < line.size() && std::isspace(line[i]))
+				++i;
+            if (i < line.size())
+                line = line.substr(i);
+            // procesar "Status: 201 OK" o "Content-Length: N"
+            if (line.size() >= 7 &&  line.find("Status:") == 0)
+            {
+                // extraer número de status en la línea
+                size_t j = 7;
+                while (j < line.size() && std::isspace(line[i]))
+					++j;
+                std::string num;
+                while (j < line.size() && std::isdigit(line[i]))
+				{
+					num.push_back(line[j]);
+					++j;
+				}
+                if (!num.empty())
+                {
+                    std::istringstream ss(num);
+                    ss >> cgiStatus;
+                }
+            }
+            // otras cabeceras (Content-Length/Content-Type) las puedes parsear si tienes estructura de respuesta
+            pos = lineEnd + 2;
+		}
+	}
+	this->_body = cgiBody;
+	this->_error = cgiStatus;
+	this->_isBodyReady = true;
+
+	if (_cgi.in_fd >= 0)
+	{
+		close(_cgi.in_fd);
+		_cgi.in_fd = -1;
+	}
+    if (_cgi.out_fd >= 0)
+	{
+		close(_cgi.out_fd);
+		_cgi.out_fd = -1;
+	}
+    _cgi.in_closed = true;
+    _cgi.out_closed = true;
+}
 
 void	RequestHandler::handleCgiIfNeeded()
 {
@@ -290,7 +458,7 @@ void RequestHandler::parseHeader()
 	size_t								num;
 	for (; vegin != vend; ++vegin) // revisar este bucle
 	{
-		if ((vegin + 1) != vend && (vegin + 2) != vend && strToLower(*vegin) == "content-lenght")
+		if ((vegin + 1) != vend && (vegin + 2) != vend && strToLower(*vegin) == "content-length")
 		{
 			if (this->_headerContent.isChunked == true)
 			{
@@ -302,12 +470,12 @@ void RequestHandler::parseHeader()
 				ss << *(vegin + 2);
 				ss >> num;
 				checkContentLength(num);
-				this->_headerContent.contentLenght = num;
+				this->_headerContent.ContentLength = num;
 			}
 		}
 		if ((vegin + 1) != vend && (vegin + 2) != vend && strToLower(*vegin) == "transfer-encoding")
 		{
-			if (this->_headerContent.contentLenght == 0)
+			if (this->_headerContent.ContentLength == 0)
 			{
 				this->_error = 404;
 				return ;
@@ -543,6 +711,8 @@ std::string	RequestHandler::joinPath(const std::string& a, const std::string& b)
 
 void	RequestHandler::chargeBody()
 {
+	if (this->_headerContent.method != "POST")
+		return ;
 	if (this->_headerContent.isChunked == true)
 	{
 		//chunkManagement();
@@ -567,11 +737,15 @@ void	RequestHandler::chargeBody()
 	{
 		this->_buffer[bytesRead] = '\0'; // Null-terminate the buffer
 		this->_body += this->_buffer; // Append to the request string
-		if (this->_headerContent.contentLenght <= this->_body.size())
+		if (this->_headerContent.ContentLength <= this->_body.size())
 		{
-			if (this->_body.size > this->_headerContent.contentLenght)
-				this->_body = this->_body.substr(0, this->_headerContent.contentLenght);
+			if (this->_body.size() > this->_headerContent.ContentLength)
+			{
+				this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
+				//comprobar si ha a acabado la transmision o si hay solicitudes pendientes
+			}
 			this->_isBodyReady = true;
+			this->_request[1] = this->_body;
 		}
 		ft_bzero(this->_buffer, sizeof(this->_buffer));
 	}
