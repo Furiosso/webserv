@@ -99,3 +99,14 @@ bool	checkExtention(std::string& name, std::string extention)
 	}
 	return true;
 }
+
+size_t hexToDecimal(const std::string &hexStr)
+{
+    std::stringstream ss;
+    size_t result;
+
+    ss << std::hex << hexStr;
+    ss >> result;
+
+    return result;
+}

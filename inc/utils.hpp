@@ -4,6 +4,7 @@
 # include <stddef.h>
 # include <iostream>
 # include <string>
+# include <sstream>
 # include <cctype>
 
 
@@ -13,6 +14,7 @@ std::string trim(std::string& line);
 bool        strIsDigit(std::string str);
 size_t		wordCounter(std::string& line, char splitter);
 std::string strToLower(std::string& s);
-bool	checkExtention(std::string& name, std::string extention);
+bool        checkExtention(std::string& name, std::string extention);
+size_t      hexToDecimal(const std::string &hexStr);
 
 #endif

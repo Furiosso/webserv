@@ -1,6 +1,6 @@
 #include "RequestHandler.hpp"
 
-RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), _fd(fd), _error(0), _body(""), _isHeaderReady(false), _isBodyReady(false)
+RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), _fd(fd), _error(0), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine("")
 {
 	_headerContent.isChunked = false;
 	_cgi.pid = -1;
@@ -709,15 +709,54 @@ std::string	RequestHandler::joinPath(const std::string& a, const std::string& b)
 	return a + "/" + b;
 }
 
+void	RequestHandler::chunkManagement() //corregir esto
+{
+	size_t	i;
+	std::string				hexLen;
+
+	this->_chunkLine += this->_buffer;
+	while (true)
+	{
+		if (this->_chunkLen == 0)
+		{
+			i = this->_chunkLine.find("\r\n");
+			if (i == std::string::npos)
+				return ;
+			hexLen = this->_chunkLine.substr(0, i);
+			this->_chunkLen = hexToDecimal(hexLen);
+			if (this->_chunkLen == 0)
+			{
+				if (this->_chunkLine.size() < 2)
+                	return;
+				if (this->_chunkLine[0] != '\r' || this->_chunkLine[1] != '\n')
+    			{
+        			this->_error = 400;
+        			return;
+    			}
+            	this->_chunkLine.erase(0, 2);
+				this->_isBodyReady = true;
+				return ;
+			}
+			this->_chunkLine.erase(0, i + 2);
+		}
+	}
+	if (this->_chunkLine.size() < this->_chunkLen + 2)
+        return;
+	if (this->_chunkLine[this->_chunkLen] != '\r'
+		|| this->_chunkLine[this->_chunkLen + 1] != '\n')
+	{
+    	this->_error = 400;
+    	return;
+	}
+    this->_body += this->_chunkLine.substr(0, this->_chunkLen);
+    this->_chunkLine.erase(0, this->_chunkLen + 2);
+    this->_chunkLen = 0;
+}
+
 void	RequestHandler::chargeBody()
 {
 	if (this->_headerContent.method != "POST")
 		return ;
-	if (this->_headerContent.isChunked == true)
-	{
-		//chunkManagement();
-		return ;
-	}
 	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
 	if (bytesRead < 0)
 	{
@@ -736,6 +775,12 @@ void	RequestHandler::chargeBody()
 	else
 	{
 		this->_buffer[bytesRead] = '\0'; // Null-terminate the buffer
+		if (this->_headerContent.isChunked == true)
+		{
+			chunkManagement();
+			ft_bzero(this->_buffer, sizeof(this->_buffer));
+			return ;
+		}
 		this->_body += this->_buffer; // Append to the request string
 		if (this->_headerContent.ContentLength <= this->_body.size())
 		{

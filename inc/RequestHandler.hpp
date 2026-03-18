@@ -43,12 +43,15 @@ private:
 	bool					_isBodyReady;
 	struct HeaderContent	_headerContent;
 	struct CgiState			_cgi;
+	size_t					_chunkLen;
+	std::string				_chunkLine;
 public:
 	RequestHandler(Server& listener, int fd);
 	~RequestHandler();
 	void		chargeHeader();
 	void		chargeBody();
 	void		checkContentLength(size_t num);
+	void		chunkManagement();
 	void		parseHeader();
 	void		setClientFd(int fd);
 	int			getClientFd() const;
