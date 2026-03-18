@@ -114,6 +114,7 @@ class Parser
 		void									errorPageLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
         void                                    locationParser(std::vector<std::string>::iterator& it, Server& server); //not
         void									cmbsLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc);
+		void    								checkServerNames(std::vector<Server>& servers);
 		int		                                getServerNameState(int prev, int pos);
         bool                                    checkclientmaxbodysize(std::string t);
         bool                                    check_ipv4(std::string t);

@@ -807,6 +807,23 @@ void    Parser::checkListen(std::vector<Server>& servers)
     }
 }
 
+void	Parser::checkServerNames(std::vector<Server>& servers)
+{
+    std::set<std::string> seen;
+    for (size_t i = 0; i < servers.size(); ++i)
+    {
+        const std::string &name = servers[i].getConfig().server_name;
+        if (name.empty())
+            continue;
+        // insertar y comprobar si ya existía
+        std::pair<std::set<std::string>::iterator, bool> res = seen.insert(name);
+        if (!res.second)
+        {
+            std::cerr << "Duplicate server_name '" << name << "' between servers (first occurrence and index " << i << ")\n";
+        }
+    }
+}
+
 Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCounter(0)
 {
 	std::ifstream   config_file(in_file);
@@ -856,7 +873,8 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
         if (*it == "root")
             this->rootParser(it, servers[i], 0);
         if (*it == "alias")
-            this->rootParser(it, servers[i], 1);
+			throw std::exception();
+            //this->rootParser(it, servers[i], 1);
 		if (*it == "location")
 		{
 			while (*it != "}")
@@ -873,6 +891,7 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
             this->locationParser(it, servers[i]);
     }
     checkListen(servers);
+	checkServerNames(servers);
     config_file.close();
 }
 

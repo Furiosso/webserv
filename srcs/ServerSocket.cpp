@@ -106,7 +106,8 @@ bool	ServerSocket::createListeners(std::vector<Server>& servers)
 				}
 				if (bind(listen_fd, rp->ai_addr, rp->ai_addrlen) < 0)
 				{
-					//perror("bind");
+					std::cerr << "No se pudo crear listener: " << ip << ":" << port
+         			<< " -> " << strerror(errno) << "\n";
 					restartListenFd(listen_fd);
 					continue;
 				}
