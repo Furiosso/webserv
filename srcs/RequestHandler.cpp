@@ -711,8 +711,9 @@ std::string	RequestHandler::joinPath(const std::string& a, const std::string& b)
 
 void	RequestHandler::chunkManagement() //corregir esto
 {
-	size_t	i;
-	std::string				hexLen;
+	size_t		i;
+	size_t		sublen;
+	std::string	hexLen;
 
 	this->_chunkLine += this->_buffer;
 	while (true)
@@ -726,12 +727,10 @@ void	RequestHandler::chunkManagement() //corregir esto
 			this->_chunkLen = hexToDecimal(hexLen);
 			if (this->_chunkLen == 0)
 			{
-				if (this->_chunkLine.size() < 2)
-                	return;
 				if (this->_chunkLine[0] != '\r' || this->_chunkLine[1] != '\n')
     			{
         			this->_error = 400;
-        			return;
+        			return ;
     			}
             	this->_chunkLine.erase(0, 2);
 				this->_isBodyReady = true;
@@ -739,18 +738,25 @@ void	RequestHandler::chunkManagement() //corregir esto
 			}
 			this->_chunkLine.erase(0, i + 2);
 		}
+		sublen = this->_chunkLen;
+		if (this->_chunkLine.size() < this->_chunkLen + 2)
+		{
+			sublen = this->_chunkLine.size();
+			this->_chunkLen -= sublen;
+			this->_body += this->_chunkLine.substr(0, sublen);
+			this->_chunkLine.erase(0, sublen);
+			return ;
+		}
+		if (this->_chunkLine[this->_chunkLen] != '\r'
+			|| this->_chunkLine[this->_chunkLen + 1] != '\n')
+		{
+    		this->_error = 400;
+    		return ;
+		}
+		this->_body += this->_chunkLine.substr(0, sublen);
+    	this->_chunkLine.erase(0, this->_chunkLen + 2);
+    	this->_chunkLen = 0;
 	}
-	if (this->_chunkLine.size() < this->_chunkLen + 2)
-        return;
-	if (this->_chunkLine[this->_chunkLen] != '\r'
-		|| this->_chunkLine[this->_chunkLen + 1] != '\n')
-	{
-    	this->_error = 400;
-    	return;
-	}
-    this->_body += this->_chunkLine.substr(0, this->_chunkLen);
-    this->_chunkLine.erase(0, this->_chunkLen + 2);
-    this->_chunkLen = 0;
 }
 
 void	RequestHandler::chargeBody()
@@ -785,10 +791,7 @@ void	RequestHandler::chargeBody()
 		if (this->_headerContent.ContentLength <= this->_body.size())
 		{
 			if (this->_body.size() > this->_headerContent.ContentLength)
-			{
 				this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
-				//comprobar si ha a acabado la transmision o si hay solicitudes pendientes
-			}
 			this->_isBodyReady = true;
 			this->_request[1] = this->_body;
 		}
