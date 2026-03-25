@@ -45,6 +45,8 @@ private:
 	struct CgiState			_cgi;
 	size_t					_chunkLen;
 	std::string				_chunkLine;
+	std::string				_sendBuffer;
+	bool					_isSent;
 public:
 	RequestHandler(Server& listener, int fd);
 	~RequestHandler();
@@ -68,6 +70,11 @@ public:
     int			getCgiInFd() const;
     int			getCgiOutFd() const;
     bool		isCgiRunning() const;
+	bool		getIsSent() const;
+	void		sendResponse();
+	std::string	loadContent(const std::string& filename) const;
+	void		flushResponse();
+	
 };
 
 

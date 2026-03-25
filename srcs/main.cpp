@@ -146,8 +146,12 @@ int main (int argc, char** argv, char** env)
 								{
                                     std::cout << "fd server = " << fd << std::endl;
 									RequestHandler client(servers[j], client_fd);
+                                    std::cout << "cualquier tonteria AQUI\n";
                                     client.chargeHeader();
 									clients.push_back(client);
+                                    if (client.getIsBodyReady() == true)
+                                        pollfds[pollfds.size() - 1].events = POLLOUT;
+                                    std::cout << "cualquier tonteria AQUI2\n";
 									break;
 								}
 							}
@@ -160,6 +164,7 @@ int main (int argc, char** argv, char** env)
 						//bool handled = false;
 						for (size_t j = 0; j < clients.size(); ++j)
 						{
+                            //std::cout << "CACA cualquier tonteria AQUI\n";
 							//Imlementar en RequestHandler:
 							// - handleRead(): recv() hasta terminar header/body o EGAIN
 							// - prepareResponse(): preparar datos a enviar
@@ -167,12 +172,12 @@ int main (int argc, char** argv, char** env)
                             {
                                 if (clients[j].getIsHeaderReady() == false)
                                     clients[j].chargeHeader();
-                                //else
-                                //{
-                                    //clients[j].chargeBody();
-                                    //if (clients[j].getIsBodyReady() == true)
-                                    //    pollfds[i].events = POLLOUT;
-                                //}
+                                else
+                                {
+                                    clients[j].chargeBody();
+                                    if (clients[j].getIsBodyReady() == true)
+                                        pollfds[i].events = POLLOUT;
+                                }
 								break ;
                             }
 						}
@@ -186,7 +191,19 @@ int main (int argc, char** argv, char** env)
 						{
 							// Implementar en RequestHandler:
                             // - handleWrite(): write() hasta terminar o EAGAIN
-                            // - isFinished(): true si respuesta enviada y cerrar según keep-alive
+                            // - isFinished(): true si respuesta enviada y cerrar según keep-alive*/
+                            std::cout << "hace el pollout\n";
+                            clients[j].sendResponse();
+                            if (clients[j].getIsSent() == true)
+                            {
+                                close(pollfds[i].fd);
+								std::swap(clients[j], clients.back());
+								clients.pop_back();
+								std::swap(pollfds[i], pollfds.back());
+								pollfds.pop_back();
+								if (i > 0)
+									--i;
+                            }
 							/*clients[j].handlewrite();
 							if (clients[j].isFinished())
 							{

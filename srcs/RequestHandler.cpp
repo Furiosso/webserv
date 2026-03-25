@@ -1,6 +1,6 @@
 #include "RequestHandler.hpp"
 
-RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), _fd(fd), _error(0), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine("")
+RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), _fd(fd), _error(0), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine(""), _isSent(false)
 {
 	_headerContent.isChunked = false;
 	_cgi.pid = -1;
@@ -45,7 +45,7 @@ bool RequestHandler::getIsHeaderReady() const { return this->_isHeaderReady; }
 
 bool RequestHandler::getIsBodyReady() const { return this->_isBodyReady; }
 
-void RequestHandler::chargeHeader()
+void RequestHandler::	chargeHeader()
 {
 	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
 	if (bytesRead < 0)
@@ -70,15 +70,20 @@ void RequestHandler::chargeHeader()
 		{
 			size_t headerEnd = this->_header.find("\r\n\r\n");
 			this->_header = this->_header.substr(0, headerEnd);
+            std::cout << "CHARGE HEADER1\n";
 			this->parseHeader();
 			std::cout << this->_header << std::endl;
+            std::cout << "CHARGE HEADER2\n";
 			this->setPath();
+            std::cout << "CHARGE HEADER3\n";
 			std::cout << "error: " << this->_error << std::endl;
 			std::cout << "header path: " << this->_headerContent.path << std::endl;
 			if(headerEnd + 4 < this->_header.size() && this->_headerContent.method == "POST")
 				this->_body = this->_header.substr(headerEnd + 4);
 			this->_request[0] = this->_header.substr(0, this->_header.find("\r\n")); // Request line
 			_isHeaderReady = true;
+			if (_headerContent.method != "POST")
+				_isBodyReady = true;
 		}
 		ft_bzero(this->_buffer, sizeof(this->_buffer));
 	}
@@ -512,6 +517,7 @@ void	RequestHandler::checkContentLength(size_t num)
 		this->_error = 413;
 }
 
+
 void	RequestHandler::setPath()
 {
 	const std::vector<LocationConfig>& locations = _listener.getConfig().locations;
@@ -526,7 +532,7 @@ void	RequestHandler::setPath()
 		autoindex = false;
 		for (; it != end; ++it)
 		{
-			//std::cout << "it->path: " << it->path << " | _headerContent.path: " << _headerContent.path << " | path.size: " << it->path.size() << " | headercontent.path.size: " << _headerContent.path.size() << " | compare: " << _headerContent.path.compare(0, it->path.size(), it->path) << std::endl;
+			std::cout << "it->path: " << it->path << " | _headerContent.path: " << _headerContent.path << " | path.size: " << it->path.size() << " | headercontent.path.size: " << _headerContent.path.size() << " | compare: " << _headerContent.path.compare(0, it->path.size(), it->path) << std::endl;
 			if (it->path.size() <= _headerContent.path.size() && _headerContent.path.compare(0, it->path.size(), it->path) == 0)
 			{
 				std::cout << "it->path: " << it->path << std::endl;
@@ -546,8 +552,10 @@ void	RequestHandler::setPath()
 					index = it->index;
 				if (_listener.getConfig().isAutoindex == true)
 					autoindex = _listener.getConfig().autoindex;
+            	std::cout << "POST CHECK = _listener.getConfig().isAutoindex == true\n";
 				if (it->isAutoindex == true)
 					autoindex = it->autoindex;
+            	std::cout << "POST AUTO == TRUE\n";
 				if (it->isAlias)
 				{
 					std::string	rest = _headerContent.path.substr(it->path.size());
@@ -555,10 +563,12 @@ void	RequestHandler::setPath()
 					checkPathValidity(_headerContent.path, index, autoindex, it->root);
 					return ;
 				}
+            	//std::cout << "POST CHECK\n";
 				if (it->isRoot)
 				{
 					_headerContent.path = it->root + _headerContent.path;
 					checkPathValidity(_headerContent.path, index, autoindex, it->root);
+            		std::cout << "POST CHECK is root\n";
 					return ;
 				}
 				_headerContent.path = _listener.getConfig().root + _headerContent.path;
@@ -578,6 +588,8 @@ static std::string	normalizePath(const std::string& p)
 	bool absolute = (path[0] =='/');
 	std::vector<std::string> parts;
 	size_t	i = 0;
+	std::cout << "path:" <<path << " i: " << i << "AHHHHHHH\n";
+
 	while (i < path.size())
 	{
 		// skip consecutive '/'
@@ -589,6 +601,7 @@ static std::string	normalizePath(const std::string& p)
 		while (j < path.size() && path[j] != '/')
 			++j;
 		std::string	token = path.substr(i, j - i);
+		i = j;
 		if (token == "." || token.empty())
 			continue;
 		else if (token == "..")
@@ -600,7 +613,7 @@ static std::string	normalizePath(const std::string& p)
 		}
 		else
 			parts.push_back(token);
-		i = j;
+		//i = j;
 	}
 	std::string out;
 	if (absolute)
@@ -628,7 +641,7 @@ static bool	isWithinRoot(const std::string& candidate, const std::string& root)
 	std::string	r = normalizePath(root);
 	std::string	c = normalizePath(candidate);
 
-	if (c.empty() || c[0] != '/')
+	if (c.empty() || ((c[0] != '/') && (c[0] == '.' && c[1] != '/')))
 		return false;
 	if (r == "/")
 		return true;
@@ -680,9 +693,11 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 						}
 						if (!isWithinRoot(joinPath(path, *it), root))
 						{
+							std::cout << "PATH EN IF: " << path << std::endl; 
 							_error = 403;
 							return ;
 						}
+						std::cout << "DENTRO DE IF\n";
 						if (checkExtention(path, ".py") == true)
 							;//comprobar si el path tiene una extension para cgi
 						_headerContent.path = joinPath(_headerContent.path, *it);
@@ -798,3 +813,54 @@ void	RequestHandler::chargeBody()
 		ft_bzero(this->_buffer, sizeof(this->_buffer));
 	}
 }
+
+void	RequestHandler::flushResponse()
+{
+	ssize_t		bytesSent;
+
+	while (!_sendBuffer.empty())
+	{
+		bytesSent = send(this->_fd, _sendBuffer.c_str(), _sendBuffer.size(), 0);
+		if (bytesSent > 0)
+			_sendBuffer.erase(0, bytesSent);
+		else if (bytesSent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+			break ;
+		else
+			break ;
+		
+	}
+	_isSent = _sendBuffer.empty();
+}
+
+void	RequestHandler::sendResponse()
+{	
+	if (_sendBuffer.empty())
+	{
+		_sendBuffer += this->_headerContent.protocol;
+		if (this->_error != 0)
+		{
+			//send error;
+			return ;	
+		}
+		_sendBuffer += " 200 OK\r\n\r\n";
+		_sendBuffer += loadContent(this->_headerContent.path);
+	}
+	std::cout << "_sendBuffer" << _sendBuffer << "\n";
+	flushResponse();
+}
+
+std::string	RequestHandler::loadContent(const std::string& filename) const
+{
+	std::ifstream	file(filename.c_str(), std::ios::binary);
+
+	file.seekg(0, std::ios::end);
+	std::streamsize	size = file.tellg();
+	file.seekg(0, std::ios::beg);
+	std::string	buffer(size, '\0');
+	if (size > 0)
+		file.read(&buffer[0], size);
+	return buffer;
+}
+
+bool	RequestHandler::getIsSent() const { return _isSent; }
+
