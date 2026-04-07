@@ -171,7 +171,12 @@ int main (int argc, char** argv, char** env)
 							if (clients[j].getClientFd() == fd)
                             {
                                 if (clients[j].getIsHeaderReady() == false)
+                                {
                                     clients[j].chargeHeader();
+                                    // If chargeHeader completed and body is ready (e.g., GET), switch to POLLOUT so we can send response
+                                    if (clients[j].getIsBodyReady() == true)
+                                        pollfds[i].events = POLLOUT;
+                                }
                                 else
                                 {
                                     clients[j].chargeBody();

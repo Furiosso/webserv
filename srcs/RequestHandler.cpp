@@ -45,15 +45,33 @@ bool RequestHandler::getIsHeaderReady() const { return this->_isHeaderReady; }
 
 bool RequestHandler::getIsBodyReady() const { return this->_isBodyReady; }
 
+static std::string getMimeType(const std::string& path)
+{
+	if (path.size() >= 5 && path.substr(path.size() - 4) == ".jpg") return "image/jpeg";
+	if (path.size() >= 6 && path.substr(path.size() - 5) == ".jpeg") return "image/jpeg";
+	if (path.size() >= 5 && path.substr(path.size() - 4) == ".png") return "image/png";
+	if (path.size() >= 5 && path.substr(path.size() - 4) == ".gif") return "image/gif";
+	if (path.size() >= 5 && path.substr(path.size() - 4) == ".svg") return "image/svg+xml";
+	if (path.size() >= 6 && path.substr(path.size() - 5) == ".html") return "text/html";
+	if (path.size() >= 5 && path.substr(path.size() - 4) == ".htm") return "text/html";
+	if (path.size() >= 5 && path.substr(path.size() - 4) == ".txt") return "text/plain";
+	if (path.size() >= 6 && path.substr(path.size() - 5) == ".json") return "application/json";
+	if (path.size() >= 5 && path.substr(path.size() - 4) == ".xml") return "application/xml";
+	if (path.size() >= 5 && path.substr(path.size() - 4) == ".css") return "text/css";
+	if (path.size() >= 4 && path.substr(path.size() - 3) == ".js") return "application/javascript";
+	return "application/octet-stream";
+}
+
 void RequestHandler::	chargeHeader()
 {
 	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
 	if (bytesRead < 0)
 	{
-		std::cerr << "bytesRead: " << bytesRead <<" fd: " << this->_fd << " _buffer: " << this->_buffer << " sizeof buffer: " << sizeof(this->_buffer) << std::endl;
-		std::cerr << "Error reading from socket: " << strerror(errno) << std::endl;
-		// Simplemente salir y esperar próxima notificación para este fd.
-        return;
+		// In non-blocking mode, EAGAIN/EWOULDBLOCK mean "no data available now" — not a fatal error.
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return;
+		std::cerr << "Error reading from socket (fd " << this->_fd << "): " << strerror(errno) << std::endl;
+		return;
 	}
 	else if (bytesRead == 0)
 	{
@@ -369,13 +387,24 @@ void RequestHandler::parseHeader()
 			break;
 		token.push_back(*begin);
 	}
-	if (token != "GET" && token != "POST" && token != "DELETE")
+	if (token != "GET" && token != "POST" && token != "DELETE" && token != "HEAD")
 	{	
 		std::cout << "que pasa\n";
 		this->_error = 405;
 		return ;
 	}
-	if (checkMethod(token, _listener.getConfig().allowed_methods) == false)
+	// Allow HEAD when GET is allowed on the server/location
+	if (token == "HEAD")
+	{
+		std::string getToken = "GET";
+		if (checkMethod(getToken, _listener.getConfig().allowed_methods) == false)
+		{
+			std::cout << "hola\n";
+			_error = 405;
+			return ;
+		}
+	}
+	else if (checkMethod(token, _listener.getConfig().allowed_methods) == false)
 	{
 		std::cout << "hola\n";
 		_error = 405;
@@ -421,9 +450,12 @@ void RequestHandler::parseHeader()
 	while (this->_header.find("\r\n") != std::string::npos) // revisar ete bucle
 	{
 		line = this->_header.substr(0, this->_header.find("\r\n")); 
-		if (wordCounter(line, ':') != 2 && line.substr(0, 4) != "Host")
+		// Accept any header line that contains a ':' separating name and value.
+		// Previous check relied on wordCounter which broke when header values contain ':' (e.g. URLs).
+		size_t colonPos = line.find(":");
+		if (colonPos == std::string::npos)
 		{
-			std::cout << "line: " << line << std::endl;
+			std::cout << "invalid header line: " << line << std::endl;
 			this->_error = 400;
 			return ;
 		}
@@ -576,8 +608,33 @@ void	RequestHandler::setPath()
 				return ;
 			}
 		}
+		if (_headerContent.path == "/")
+		{
+			if (!_listener.getConfig().index.empty())
+					index = _listener.getConfig().index;
+			if (_listener.getConfig().isAutoindex == true)
+					autoindex = _listener.getConfig().autoindex;
+			_headerContent.path = _listener.getConfig().root + _headerContent.path;
+			checkPathValidity(_headerContent.path, index, autoindex, _listener.getConfig().root);
+			return ;
+		}
 		std::cout << "perdona" << std::endl;
 	}
+	// If no location matched or there are no locations, default to server root
+	
+	std::vector<std::string> index;
+	bool autoindex = false;
+	if (!_listener.getConfig().index.empty())
+		index = _listener.getConfig().index;
+	if (_listener.getConfig().isAutoindex == true)
+		autoindex = _listener.getConfig().autoindex;
+	// prepend server root if the path is still absolute (starts with '/')
+	if (!_headerContent.path.empty() && _headerContent.path[0] == '/')
+	{
+		_headerContent.path = _listener.getConfig().root + _headerContent.path;
+		checkPathValidity(_headerContent.path, index, autoindex, _listener.getConfig().root);
+	}
+	
 }
 
 static std::string	normalizePath(const std::string& p)
@@ -669,6 +726,7 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 			}
 			if (!isWithinRoot(path, root))
 			{
+				//std::cout << "sale por aqui. Path: " << path << ". Root: " << root << std::endl;
 				_error = 403;
 				return ;
 			}
@@ -708,7 +766,10 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 			if (autoindex == true)
 				;//generar body de la respuesta con el listado del directorio
 			else
+			{
+				std::cout << "sale por aqui. Path: " << path << ". Root: " << root << std::endl;
 				_error = 403;
+			}
 			return ;
 		}
 	}
@@ -781,10 +842,11 @@ void	RequestHandler::chargeBody()
 	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
 	if (bytesRead < 0)
 	{
-		std::cerr << "bytesRead: " << bytesRead <<" fd: " << this->_fd << " _buffer: " << this->_buffer << " sizeof buffer: " << sizeof(this->_buffer) << std::endl;
-		std::cerr << "Error reading from socket: " << strerror(errno) << std::endl;
-		// Simplemente salir y esperar próxima notificación para este fd.
-        return;
+		// Non-blocking sockets will often return EAGAIN/EWOULDBLOCK when there's no data yet.
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return;
+		std::cerr << "Error reading from socket (fd " << this->_fd << "): " << strerror(errno) << std::endl;
+		return;
 	}
 	else if (bytesRead == 0)
 	{
@@ -836,20 +898,31 @@ void	RequestHandler::sendResponse()
 {	
 	if (_sendBuffer.empty())
 	{
+		// Start with protocol and status
 		_sendBuffer += this->_headerContent.protocol;
 		if (this->_error != 0)
 		{
-			//send error;
-			return ;	
+			// TODO: generate proper error response bodies and headers
+			_sendBuffer += " 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
+			_isSent = true;
+			return ;
 		}
-		_sendBuffer += " 200 OK\r\n\r\n";
-		_sendBuffer += loadContent(this->_headerContent.path);
+		std::string body = loadContent(this->_headerContent.path);
+		std::ostringstream hs;
+		hs << " 200 OK\r\n";
+		hs << "Content-Length: " << body.size() << "\r\n";
+		hs << "Content-Type: " << getMimeType(this->_headerContent.path) << "\r\n";
+		hs << "Connection: close\r\n";
+		hs << "\r\n";
+		_sendBuffer += hs.str();
+		if (this->_headerContent.method != "HEAD")
+			_sendBuffer += body;
 	}
-	std::cout << "_sendBuffer" << _sendBuffer << "\n";
+	// Do not print binary response to stdout (can be very large and block logs)
 	flushResponse();
 }
 
-std::string	RequestHandler::loadContent(const std::string& filename) const
+/*std::string	RequestHandler::loadContent(const std::string& filename) const
 {
 	std::ifstream	file(filename.c_str(), std::ios::binary);
 
@@ -860,7 +933,33 @@ std::string	RequestHandler::loadContent(const std::string& filename) const
 	if (size > 0)
 		file.read(&buffer[0], size);
 	return buffer;
+}*/
+
+std::string	RequestHandler::loadContent(const std::string& filename) const
+{
+	std::ifstream	file(filename.c_str(), std::ios::binary);
+
+	if (!file.is_open())
+	{
+		return std::string();
+	}
+
+	file.seekg(0, std::ios::end);
+	std::streamoff soff = file.tellg();
+	if (soff <= 0)
+	{
+		return std::string();
+	}
+
+	std::streamsize size = static_cast<std::streamsize>(soff);
+	file.seekg(0, std::ios::beg);
+	std::string buffer;
+	buffer.resize(size);
+	file.read(&buffer[0], size);
+	return buffer;
 }
+
+
 
 bool	RequestHandler::getIsSent() const { return _isSent; }
 
