@@ -62,6 +62,39 @@ static std::string getMimeType(const std::string& path)
 	return "application/octet-stream";
 }
 
+// Decode percent-encoded URL path (e.g. %2B -> +, %23 -> #). Does not
+// interpret '+' as space because in path components '+' is literal.
+static int hexVal(char c)
+{
+	if (c >= '0' && c <= '9') return c - '0';
+	if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+	if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+	return -1;
+}
+
+static std::string urlDecode(const std::string& s)
+{
+	std::string out;
+	out.reserve(s.size());
+	for (size_t i = 0; i < s.size(); ++i)
+	{
+		if (s[i] == '%' && i + 2 < s.size())
+		{
+			int hi = hexVal(s[i + 1]);
+			int lo = hexVal(s[i + 2]);
+			if (hi >= 0 && lo >= 0)
+			{
+				char decoded = (char)((hi << 4) | lo);
+				out.push_back(decoded);
+				i += 2;
+				continue;
+			}
+		}
+		out.push_back(s[i]);
+	}
+	return out;
+}
+
 void RequestHandler::	chargeHeader()
 {
 	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
@@ -427,7 +460,7 @@ void RequestHandler::parseHeader()
 		_error = 400;
 		return ;
 	}
-	this->_headerContent.path = token;
+	this->_headerContent.path = urlDecode(token);
 	handleCgiIfNeeded();
 	/*if (checkExtention(this->_headerContent.path, ".py") == true)
 		;//desviar el flujo hacia el gestor de cgi*/
