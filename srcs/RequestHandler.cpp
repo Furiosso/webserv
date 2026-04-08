@@ -1,8 +1,12 @@
 #include "RequestHandler.hpp"
+#include <dirent.h>
+#include <iomanip>
+#include <new>
 
 RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), _fd(fd), _error(0), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine(""), _isSent(false)
 {
 	_headerContent.isChunked = false;
+	_headerContent.isAutoindexResponse = false;
 	_cgi.pid = -1;
 	_cgi.in_fd = -1;
 	_cgi.out_fd = -1;
@@ -18,23 +22,68 @@ RequestHandler::~RequestHandler()
 		close(_cgi.in_fd);
 		_cgi.in_fd = -1;
 	}
-    if (_cgi.out_fd >= 0)
+	if (_cgi.out_fd >= 0)
 	{
 		close(_cgi.out_fd);
 		_cgi.out_fd = -1;
 	}
-    if (_cgi.pid > 0)
-    {
-        int status = 0;
-        pid_t w = waitpid(_cgi.pid, &status, WNOHANG);
-        if (w == 0)
-        {
-            // child aún corre: intentar kill
-            kill(_cgi.pid, SIGKILL);
-            waitpid(_cgi.pid, &status, 0);
-        }
-        _cgi.pid = -1;
-    }
+	if (_cgi.pid > 0)
+	{
+		int status = 0;
+		pid_t w = waitpid(_cgi.pid, &status, WNOHANG);
+		if (w == 0)
+		{
+			// child still running: try kill
+			kill(_cgi.pid, SIGKILL);
+			waitpid(_cgi.pid, &status, 0);
+		}
+		_cgi.pid = -1;
+	}
+}
+
+Server	RequestHandler::getListener() const { return _listener; }
+
+std::string RequestHandler::generateDirectoryListing(const std::string& dirPath, const std::string& requestPath)
+{
+	try {
+		DIR* dir = opendir(dirPath.c_str());
+		if (!dir)
+			return std::string();
+		std::string html;
+		html += "<!doctype html><html><head><meta charset=\"utf-8\"><title>Index of ";
+		html += requestPath + "</title></head><body>";
+		html += "<h1>Index of " + requestPath + "</h1>\n<hr>\n<pre>";
+		struct dirent* ent;
+		std::vector<std::string> names;
+		while ((ent = readdir(dir)) != NULL)
+		{
+			std::string n(ent->d_name);
+			if (n == ".") continue;
+			names.push_back(n);
+		}
+		closedir(dir);
+		std::sort(names.begin(), names.end());
+		for (size_t i = 0; i < names.size(); ++i)
+		{
+			std::string name = names[i];
+			std::string href = requestPath;
+			if (href.empty() || href[0] != '/')
+				href = "/" + href;
+			if (!href.empty() && href[href.size() - 1] != '/')
+				href += "/";
+			std::string fullPath = joinPath(dirPath, name);
+			struct stat s;
+			if (stat(fullPath.c_str(), &s) == 0)
+				if (S_ISDIR(s.st_mode))
+					name += "/";
+			html += "<a href=\"" + href + name + "\">" + name + "</a>\n";
+		}
+		html += "</pre><hr></body></html>";
+		return html;
+	} catch (const std::bad_alloc& e) {
+		std::cerr << "autoindex: std::bad_alloc while generating directory listing for " << dirPath << "\n";
+		return std::string();
+	}
 }
 
 void RequestHandler::setClientFd(int fd) { this->_fd = fd; }
@@ -125,7 +174,12 @@ void RequestHandler::	chargeHeader()
 			this->parseHeader();
 			std::cout << this->_header << std::endl;
             std::cout << "CHARGE HEADER2\n";
-			this->setPath();
+			try {
+				this->setPath();
+			} catch (const std::exception& e) {
+				std::cerr << "Exception in setPath(): " << e.what() << std::endl;
+				this->_error = 500;
+			}
             std::cout << "CHARGE HEADER3\n";
 			std::cout << "error: " << this->_error << std::endl;
 			std::cout << "header path: " << this->_headerContent.path << std::endl;
@@ -797,7 +851,9 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 				}
 			}
 			if (autoindex == true)
-				;//generar body de la respuesta con el listado del directorio
+				// generar body de la respuesta con el listado del directorio
+				// mark to produce autoindex HTML in sendResponse
+				_headerContent.isAutoindexResponse = true;
 			else
 			{
 				std::cout << "sale por aqui. Path: " << path << ". Root: " << root << std::endl;
@@ -927,6 +983,11 @@ void	RequestHandler::flushResponse()
 	_isSent = _sendBuffer.empty();
 }
 
+void	RequestHandler::handleDelete()
+{
+	
+}
+
 void	RequestHandler::sendResponse()
 {	
 	if (_sendBuffer.empty())
@@ -940,11 +1001,55 @@ void	RequestHandler::sendResponse()
 			_isSent = true;
 			return ;
 		}
-		std::string body = loadContent(this->_headerContent.path);
+		std::string body;
+		// If path is a directory and autoindex response was requested, generate listing
+		struct stat st;
+		if (stat(this->_headerContent.path.c_str(), &st) == 0 && S_ISDIR(st.st_mode) && _headerContent.isAutoindexResponse)
+		{
+			// compute requestPath for links: try to remove server root prefix
+			try
+			{
+				std::string requestPath = this->_headerContent.path;
+				// naive: use basename relative to server root
+				std::string root = _listener.getConfig().root;
+				if (requestPath.find(root) == 0)
+					requestPath = requestPath.substr(root.size());
+				if (requestPath.empty()) requestPath = "/";
+				body = generateDirectoryListing(this->_headerContent.path, requestPath);
+			}
+			catch (const std::bad_alloc& e)
+			{
+				std::cerr << "sendResponse: std::bad_alloc while preparing autoindex for " << this->_headerContent.path << "\n";
+				this->_error = 500;
+				body.clear();
+			}
+		}
+		else
+		{
+			body = loadContent(this->_headerContent.path);
+		}
+		if (_headerContent.method == "GET")
+		if (_headerContent.method == "POST")
+		if (_headerContent.method == "DELETE")
+			handleDelete();
 		std::ostringstream hs;
 		hs << " 200 OK\r\n";
 		hs << "Content-Length: " << body.size() << "\r\n";
-		hs << "Content-Type: " << getMimeType(this->_headerContent.path) << "\r\n";
+		// === INSERT SWITCH BY HTTP METHOD HERE ===
+		// Single-line notes for implementation:
+		// 1) Add: switch (this->_headerContent.method) { case "GET": case "HEAD": case "POST": case "DELETE": }
+		// 2) For GET: if file -> body as loaded; if dir+autoindex -> body already generated above; set status 200.
+		// 3) For HEAD: same as GET but do not append body later (respect method when adding body to _sendBuffer).
+		// 4) For POST: if CGI -> initiate startCgiNonBlocking(...) here (only after body received) and set up _cgi.write_buf; set appropriate status (201/200) or delegate to CGI handling.
+		// 5) For DELETE: try unlink(joinPath(root, requested)); set _error = 204 on success or 404/403 on failure.
+		// 6) Ensure any filesystem ops check isWithinRoot(...) and access(..., R_OK/W_OK) before acting.
+		// 7) After switch, prepare `body` (or leave empty for HEAD/204) and set content-type accordingly.
+		// 8) Do NOT block for long operations; prefer non-blocking or spawn CGI as done elsewhere.
+		// If we produced an autoindex listing, declare it as HTML so browsers render it instead of downloading
+		if (this->_headerContent.isAutoindexResponse)
+			hs << "Content-Type: text/html\r\n";
+		else
+			hs << "Content-Type: " << getMimeType(this->_headerContent.path) << "\r\n";
 		hs << "Connection: close\r\n";
 		hs << "\r\n";
 		_sendBuffer += hs.str();

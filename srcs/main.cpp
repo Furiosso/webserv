@@ -148,7 +148,14 @@ int main (int argc, char** argv, char** env)
 									RequestHandler client(servers[j], client_fd);
                                     std::cout << "cualquier tonteria AQUI\n";
                                     client.chargeHeader();
-									clients.push_back(client);
+                                    try {
+                                        clients.push_back(client);
+                                    }
+									catch (const std::exception& e) {
+                                    	std::cerr << "Failed to store client: " << e.what() << std::endl;
+                                    	close(client_fd);
+                                    	continue;
+                                    }
                                     if (client.getIsBodyReady() == true)
                                         pollfds[pollfds.size() - 1].events = POLLOUT;
                                     std::cout << "cualquier tonteria AQUI2\n";

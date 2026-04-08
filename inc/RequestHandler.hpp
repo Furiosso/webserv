@@ -15,6 +15,7 @@ struct HeaderContent
 	bool		isChunked;
 	std::string path;
 	std::string	protocol;
+	bool		isAutoindexResponse;
 };
 
 struct CgiState
@@ -59,6 +60,7 @@ public:
 	int			getClientFd() const;
 	bool		getIsHeaderReady() const;
 	bool		getIsBodyReady() const;
+	Server		getListener() const;
 	void		setPath();
 	bool		checkMethod(std::string& method, const std::vector<std::string>& vec);
 	void		checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex, const std::string& root);
@@ -74,6 +76,9 @@ public:
 	void		sendResponse();
 	std::string	loadContent(const std::string& filename) const;
 	void		flushResponse();
+	std::string	generateDirectoryListing(const std::string& dirPath, const std::string& requestPath);
+	void		handleDelete();
+
 	
 };
 
