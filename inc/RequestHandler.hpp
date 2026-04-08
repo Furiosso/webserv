@@ -35,6 +35,7 @@ class RequestHandler
 private:
 	Server					_listener;
 	int						_fd;
+	int						_status;
 	char					_buffer[4096]; // establecer una macro para el tamaño del buffer
 	std::string				_request[2];
 	int						_error;

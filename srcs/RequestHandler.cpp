@@ -985,7 +985,27 @@ void	RequestHandler::flushResponse()
 
 void	RequestHandler::handleDelete()
 {
-	
+	struct stat s;
+	//if (!isWithinRoot())
+	if (stat(_headerContent.path.c_str(), &s) == 0)
+	{
+		if (S_ISDIR(s.st_mode))
+		{
+			_error = 403;
+			return ;
+		}
+	}
+	if (std::remove(_headerContent.path.c_str()) !=  0)
+	{
+		if (errno == ENOENT)
+        	_error = 404;
+    	else if (errno == EACCES || errno == EPERM)
+        	_error = 403;
+    	else
+        	_error = 500;
+		return ;
+	}
+	_error = 204;
 }
 
 void	RequestHandler::sendResponse()
@@ -994,9 +1014,10 @@ void	RequestHandler::sendResponse()
 	{
 		// Start with protocol and status
 		_sendBuffer += this->_headerContent.protocol;
-		if (this->_error != 0)
+		if (this->_error >= 300 && this->_error < 600)
 		{
 			// TODO: generate proper error response bodies and headers
+			//hacer un mensaje de error personalizado
 			_sendBuffer += " 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
 			_isSent = true;
 			return ;
