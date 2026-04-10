@@ -100,6 +100,15 @@ bool	checkExtention(std::string& name, std::string extention)
 	return true;
 }
 
+std::string getExtension(const std::string& path)
+{
+    size_t dot = path.find_last_of('.');
+    size_t slash = path.find_last_of('/');
+    if (dot == std::string::npos || (slash != std::string::npos && dot < slash))
+        return "";
+    return path.substr(dot);
+}
+
 size_t hexToDecimal(const std::string &hexStr)
 {
     std::stringstream	ss;

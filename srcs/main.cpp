@@ -103,7 +103,29 @@ int main (int argc, char** argv, char** env)
             return 1;
         }
         std::vector<struct pollfd> pollfds = sockman.getPollfds();
-		std::vector<RequestHandler> clients;
+        std::vector<RequestHandler> clients;
+        // Map CGI fds (in_fd/out_fd) to client index in `clients` vector
+        std::map<int, size_t> cgiFdToClientIdx;
+
+        // helper functions (C++98 compatible)
+        struct CgiHelpers {
+            static void registerCgiFd(std::vector<struct pollfd>& pollfds, std::map<int, size_t>& map, int fd, size_t clientIdx, short events) {
+                if (fd < 0) return;
+                struct pollfd p; p.fd = fd; p.events = events; p.revents = 0; pollfds.push_back(p);
+                map[fd] = clientIdx;
+            }
+            static void unregisterCgiFds(std::vector<struct pollfd>& pollfds, std::map<int, size_t>& map, int infd, int outfd) {
+                if (infd >= 0) map.erase(infd);
+                if (outfd >= 0) map.erase(outfd);
+                for (size_t k = 0; k < pollfds.size(); ) {
+                    if (pollfds[k].fd == infd || pollfds[k].fd == outfd) {
+                        close(pollfds[k].fd);
+                        std::swap(pollfds[k], pollfds.back());
+                        pollfds.pop_back();
+                    } else ++k;
+                }
+            }
+        };
         while (1)
         {
             nfds_t  nfds = static_cast<nfds_t>(pollfds.size());
@@ -113,9 +135,21 @@ int main (int argc, char** argv, char** env)
                 std::cerr << "Poll not ready: " << strerror(errno) << "\n";
                 break;
             }
+            // Before iterating events, register any newly-started CGI fds from clients
+            for (size_t ci = 0; ci < clients.size(); ++ci) {
+                int inFd = clients[ci].getCgiInFd();
+                int outFd = clients[ci].getCgiOutFd();
+                if (inFd >= 0 && cgiFdToClientIdx.count(inFd) == 0) {
+                    CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, inFd, ci, POLLOUT);
+                }
+                if (outFd >= 0 && cgiFdToClientIdx.count(outFd) == 0) {
+                    CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, outFd, ci, POLLIN);
+                }
+            }
+
             for(std::vector<struct pollfd>::size_type i = 0; i < pollfds.size(); ++i)
             {
-				//comprobar signals
+                //comprobar signals
                 if (pollfds[i].revents & POLLHUP)
 				{
                     //std::cout << "sus muertos\n";
@@ -145,18 +179,18 @@ int main (int argc, char** argv, char** env)
 								if (servers[j].getFd() == fd)
 								{
                                     std::cout << "fd server = " << fd << std::endl;
-									RequestHandler client(servers[j], client_fd);
-                                    std::cout << "cualquier tonteria AQUI\n";
-                                    client.chargeHeader();
                                     try {
-                                        clients.push_back(client);
+                                        clients.push_back(RequestHandler(servers[j], client_fd));
                                     }
-									catch (const std::exception& e) {
-                                    	std::cerr << "Failed to store client: " << e.what() << std::endl;
-                                    	close(client_fd);
-                                    	continue;
+                                    catch (const std::exception& e) {
+                                        std::cerr << "Failed to store client: " << e.what() << std::endl;
+                                        close(client_fd);
+                                        continue;
                                     }
-                                    if (client.getIsBodyReady() == true)
+                                    std::cout << "cualquier tonteria AQUI\n";
+                                    // charge header on the in-place constructed client
+                                    clients.back().chargeHeader();
+                                    if (clients.back().getIsBodyReady() == true)
                                         pollfds[pollfds.size() - 1].events = POLLOUT;
                                     std::cout << "cualquier tonteria AQUI2\n";
 									break;
@@ -164,7 +198,7 @@ int main (int argc, char** argv, char** env)
 							}
                         }
                     }
-					else
+                    else
 					{
 						// petición entrante en un cliente existente: leer/parsear
 						//manageRequest(pollfds[i].fd);
@@ -193,6 +227,19 @@ int main (int argc, char** argv, char** env)
 								break ;
                             }
 						}
+
+                        // If not a client socket, check if it's a CGI fd and dispatch
+                        if (cgiFdToClientIdx.count(fd)) {
+                            size_t clientIdx = cgiFdToClientIdx[fd];
+                            int revents = pollfds[i].revents;
+                            clients[clientIdx].handleCgiFdEvent(fd, revents);
+                            // If CGI finished, unregister its fds
+                            if (!clients[clientIdx].isCgiRunning()) {
+                                int infd = clients[clientIdx].getCgiInFd();
+                                int outfd = clients[clientIdx].getCgiOutFd();
+                                CgiHelpers::unregisterCgiFds(pollfds, cgiFdToClientIdx, infd, outfd);
+                            }
+                        }
 					}
 				}
 				if (pollfds[i].revents & POLLOUT)

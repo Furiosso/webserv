@@ -111,6 +111,30 @@ static std::string getMimeType(const std::string& path)
 	return "application/octet-stream";
 }
 
+static const char* reasonPhrase(int code)
+{
+	switch (code)
+	{
+		case 200: return "OK";
+		case 201: return "Created";
+		case 204: return "No Content";
+		case 400: return "Bad Request";
+		case 401: return "Unauthorized";
+		case 403: return "Forbidden";
+		case 404: return "Not Found";
+		case 405: return "Method Not Allowed";
+		case 413: return "Payload Too Large";
+		case 414: return "URI Too Long";
+		case 415: return "Unsupported Media Type";
+		case 500: return "Internal Server Error";
+		case 501: return "Not Implemented";
+		case 502: return "Bad Gateway";
+		case 504: return "Gateway Timeout";
+		case 505: return "HTTP Version Not Supported";
+		default: return "Error";
+	}
+}
+
 // Decode percent-encoded URL path (e.g. %2B -> +, %23 -> #). Does not
 // interpret '+' as space because in path components '+' is literal.
 static int hexVal(char c)
@@ -515,7 +539,6 @@ void RequestHandler::parseHeader()
 		return ;
 	}
 	this->_headerContent.path = urlDecode(token);
-	handleCgiIfNeeded();
 	/*if (checkExtention(this->_headerContent.path, ".py") == true)
 		;//desviar el flujo hacia el gestor de cgi*/
 	std::cout << "path: " << token << std::endl;
@@ -679,6 +702,7 @@ void	RequestHandler::setPath()
 				{
 					std::string	rest = _headerContent.path.substr(it->path.size());
 					_headerContent.path = it->root + rest;
+					_headerContent.root = it->root;
 					checkPathValidity(_headerContent.path, index, autoindex, it->root);
 					return ;
 				}
@@ -686,11 +710,13 @@ void	RequestHandler::setPath()
 				if (it->isRoot)
 				{
 					_headerContent.path = it->root + _headerContent.path;
+					_headerContent.root = it->root;
 					checkPathValidity(_headerContent.path, index, autoindex, it->root);
             		std::cout << "POST CHECK is root\n";
 					return ;
 				}
 				_headerContent.path = _listener.getConfig().root + _headerContent.path;
+				_headerContent.root = _listener.getConfig().root;
 				checkPathValidity(_headerContent.path, index, autoindex, _listener.getConfig().root);
 				return ;
 			}
@@ -702,6 +728,7 @@ void	RequestHandler::setPath()
 			if (_listener.getConfig().isAutoindex == true)
 					autoindex = _listener.getConfig().autoindex;
 			_headerContent.path = _listener.getConfig().root + _headerContent.path;
+			_headerContent.root = _listener.getConfig().root;
 			checkPathValidity(_headerContent.path, index, autoindex, _listener.getConfig().root);
 			return ;
 		}
@@ -719,6 +746,7 @@ void	RequestHandler::setPath()
 	if (!_headerContent.path.empty() && _headerContent.path[0] == '/')
 	{
 		_headerContent.path = _listener.getConfig().root + _headerContent.path;
+		_headerContent.root = _listener.getConfig().root;
 		checkPathValidity(_headerContent.path, index, autoindex, _listener.getConfig().root);
 	}
 	
@@ -862,6 +890,11 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 			return ;
 		}
 	}
+	// If file doesn't exist: for POST we allow creating new resources, so
+	// do not set 404 here; caller (e.g., sendResponse) will handle creation.
+	if (this->_headerContent.method == "POST")
+		return;
+
 	_error = 404;
 }
 
@@ -928,7 +961,9 @@ void	RequestHandler::chargeBody()
 {
 	if (this->_headerContent.method != "POST")
 		return ;
+	//std::cout << "ENTER chargeBody fd=" << this->_fd << " path=" << this->_headerContent.path << "\n";
 	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
+	//std::cout << "recv returned " << bytesRead << "\n";
 	if (bytesRead < 0)
 	{
 		// Non-blocking sockets will often return EAGAIN/EWOULDBLOCK when there's no data yet.
@@ -960,6 +995,7 @@ void	RequestHandler::chargeBody()
 				this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
 			this->_isBodyReady = true;
 			this->_request[1] = this->_body;
+			std::cout << "CHARGE BODY: body ready, size=" << this->_body.size() << "\n";
 		}
 		ft_bzero(this->_buffer, sizeof(this->_buffer));
 	}
@@ -977,8 +1013,7 @@ void	RequestHandler::flushResponse()
 		else if (bytesSent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
 			break ;
 		else
-			break ;
-		
+			break ;	
 	}
 	_isSent = _sendBuffer.empty();
 }
@@ -986,60 +1021,181 @@ void	RequestHandler::flushResponse()
 void	RequestHandler::handleDelete()
 {
 	struct stat s;
-	//if (!isWithinRoot())
-	if (stat(_headerContent.path.c_str(), &s) == 0)
+	// Enforce server root only: do not allow DELETE outside the server's root,
+	// even if a location alias points elsewhere.
+	std::string root = _listener.getConfig().root;
+	if (!isWithinRoot(_headerContent.path, root))
 	{
-		if (S_ISDIR(s.st_mode))
-		{
-			_error = 403;
-			return ;
-		}
+		//std::cout << "EL PUTO ROOT: " << root << "	EL PUTO PATH: " << _headerContent.path << std::endl;
+		//std::cout << "EL BICHOOOOOOOOOOOOOOOOOOOOOOOOOOOO" << std::endl;
+		_error = 403;
+		return;
 	}
-	if (std::remove(_headerContent.path.c_str()) !=  0)
+	if (stat(_headerContent.path.c_str(), &s) != 0)
 	{
 		if (errno == ENOENT)
-        	_error = 404;
-    	else if (errno == EACCES || errno == EPERM)
-        	_error = 403;
-    	else
-        	_error = 500;
-		return ;
+			_error = 404;
+		else
+			_error = 500;
+		return;
+	}
+	if (S_ISDIR(s.st_mode))
+	{
+		_error = 403;
+		return;
+	}
+	if (std::remove(_headerContent.path.c_str()) != 0)
+	{
+		if (errno == ENOENT)
+			_error = 404;
+		else if (errno == EACCES || errno == EPERM)
+			_error = 403;
+		else
+			_error = 500;
+		return;
 	}
 	_error = 204;
 }
 
 void	RequestHandler::sendResponse()
 {	
+	std::cout << "ENTER sendResponse for fd " << this->_fd << " method=" << this->_headerContent.method << "\n";
 	if (_sendBuffer.empty())
 	{
-		// Start with protocol and status
-		_sendBuffer += this->_headerContent.protocol;
+		// If an error was already set before preparing response, send that error code
 		if (this->_error >= 300 && this->_error < 600)
 		{
-			// TODO: generate proper error response bodies and headers
-			//hacer un mensaje de error personalizado
-			_sendBuffer += " 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
+			//std::map<int, std::string>::iterator	it = this->_listener.getConfig().error_pages.find(this->_error);
+			/*std::ostringstream hs;
+			hs << this->_headerContent.protocol << " " << this->_error << " " << reasonPhrase(this->_error) << "\r\n";
+			hs << "Connection: close\r\n";
+			hs << "Content-Length: 0\r\n\r\n";
+			_sendBuffer += hs.str();
 			_isSent = true;
-			return ;
+			flushResponse();
+			return;*/
+		}
+
+		// Handle DELETE specially: do not load the file content before attempting to delete it
+		if (this->_headerContent.method == "DELETE")
+		{
+			handleDelete();
+			if (this->_error >= 300 && this->_error < 600)
+			{
+				std::ostringstream hs;
+				hs << this->_headerContent.protocol << " " << this->_error << " " << reasonPhrase(this->_error) << "\r\n";
+				hs << "Connection: close\r\n";
+				hs << "Content-Length: 0\r\n\r\n";
+				_sendBuffer += hs.str();
+				_isSent = true;
+				flushResponse();
+				return;
+			}
+			// Success: 204 No Content
+			std::ostringstream hs;
+			hs << this->_headerContent.protocol << " 204 " << reasonPhrase(204) << "\r\n";
+			hs << "Connection: close\r\n";
+			hs << "Content-Length: 0\r\n\r\n";
+			_sendBuffer += hs.str();
+			_isSent = true;
+			flushResponse();
+			return;
+		}
+
+		if (this->_headerContent.method == "POST")
+		{
+			std::string serverRoot = _listener.getConfig().root;
+			if (!isWithinRoot(_headerContent.path, serverRoot))
+			{
+				this->_error = 403;
+        		// prepare error response (ya lo manejas más arriba)
+        		std::ostringstream hs;
+        		hs << this->_headerContent.protocol << " " << this->_error << " " << reasonPhrase(this->_error) << "\r\n";
+        		hs << "Connection: close\r\n";
+        		hs << "Content-Length: 0\r\n\r\n";
+        		_sendBuffer += hs.str();
+        		_isSent = true;
+        		flushResponse();
+        		return;
+			}
+			struct stat st;
+			bool existed = (stat(this->_headerContent.path.c_str(), &st) == 0);
+			if (existed && S_ISDIR(st.st_mode))
+			{
+				_error = 403;
+				return;
+			}
+			std::string ext = getExtension(_headerContent.path);
+			std::map<std::string,std::string> cgiMap = _listener.getConfig().cgi; //location.cgi
+			if (cgiMap.count(ext))
+    		{
+    		    // start CGI non-blocking (body already in _body)
+    		    if (!startCgiNonBlocking(this->_headerContent.path, cgiMap[ext]))
+    		    {
+    		        this->_error = 500;
+    		        return;
+    		    }
+    		    // response will be produced when CGI finishes (finalizeCgiIfDone)
+    		    return;
+    		}
+			int	fd = open(this->_headerContent.path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+			if (fd < 0)
+			{
+				if (errno == EACCES || errno == EPERM) this->_error = 403;
+        		else if (errno == ENOENT) this->_error = 404;
+        		else this->_error = 500;
+				return ;
+			}
+			ssize_t to_write = _body.size();
+    		const char* buf = _body.c_str();
+    		ssize_t written = 0;
+			while (to_write > 0)
+			{
+				ssize_t w = write(fd, buf + written, to_write);
+        		if (w <= 0)
+        		{
+        		    close(fd);
+        		    this->_error = 500;
+        		    return;
+        		}
+        		written += w;
+        		to_write -= w;
+			}
+			close (fd);
+			int	status;
+			if (existed)
+				status = 200;
+			else
+				status = 201;
+			// Build a Location header using the request path (strip server root)
+			std::string requestUri = this->_headerContent.path;
+			if (requestUri.find(serverRoot) == 0)
+				requestUri = requestUri.substr(serverRoot.size());
+			if (requestUri.empty())
+				requestUri = "/";
+			std::ostringstream hs;
+			hs << this->_headerContent.protocol << " " << status << " " << reasonPhrase(status) << "\r\n";
+			if (!existed) hs << "Location: " << requestUri << "\r\n";
+			hs << "Connection: close\r\n";
+			hs << "Content-Length: 0\r\n\r\n";
+			_sendBuffer += hs.str();
+			_isSent = true;
+			flushResponse();
+			return;
 		}
 		std::string body;
 		// If path is a directory and autoindex response was requested, generate listing
 		struct stat st;
 		if (stat(this->_headerContent.path.c_str(), &st) == 0 && S_ISDIR(st.st_mode) && _headerContent.isAutoindexResponse)
 		{
-			// compute requestPath for links: try to remove server root prefix
-			try
-			{
+			try {
 				std::string requestPath = this->_headerContent.path;
-				// naive: use basename relative to server root
 				std::string root = _listener.getConfig().root;
 				if (requestPath.find(root) == 0)
 					requestPath = requestPath.substr(root.size());
 				if (requestPath.empty()) requestPath = "/";
 				body = generateDirectoryListing(this->_headerContent.path, requestPath);
-			}
-			catch (const std::bad_alloc& e)
-			{
+			} catch (const std::bad_alloc& e) {
 				std::cerr << "sendResponse: std::bad_alloc while preparing autoindex for " << this->_headerContent.path << "\n";
 				this->_error = 500;
 				body.clear();
@@ -1049,12 +1205,11 @@ void	RequestHandler::sendResponse()
 		{
 			body = loadContent(this->_headerContent.path);
 		}
-		if (_headerContent.method == "GET")
-		if (_headerContent.method == "POST")
-		if (_headerContent.method == "DELETE")
-			handleDelete();
+
+		// Default response for successful GET/HEAD/POST is 200
+		int status = 200;
 		std::ostringstream hs;
-		hs << " 200 OK\r\n";
+		hs << this->_headerContent.protocol << " " << status << " " << reasonPhrase(status) << "\r\n";
 		hs << "Content-Length: " << body.size() << "\r\n";
 		// === INSERT SWITCH BY HTTP METHOD HERE ===
 		// Single-line notes for implementation:
