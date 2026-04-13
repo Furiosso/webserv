@@ -4,7 +4,7 @@
 #include <new>
 #include <cstring>
 
-Client::Client(Server& listener, int fd) : _listener(listener), _fd(fd), _status(0), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine(""), _isSent(false), _isLocation(false)
+Client::Client(Server& listener, int fd) : _listener(listener), _fd(fd), _status(200), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine(""), _isSent(false), _isLocation(false)
 {
 	_headerContent.isChunked = false;
 	_headerContent.ContentLength = 0;
@@ -216,7 +216,7 @@ void Client::	chargeHeader()
 			return;
 		}
 		// For non-POST methods: mark as closed so main will cleanup
-		this->_status = 0;
+		this->_status = 200;
 		return;
 	}
 	else
@@ -577,7 +577,7 @@ void Client::parseHeader()
 	std::string					line;
 	size_t						headerEnd;
 
-	if (this->_status != 0)
+	if (this->_status != 200)
 		return ;
 	headerEnd = this->_header.find("\r\n"); //Host: localhost\r\n
 	line = this->_header.substr(0, headerEnd); //Host: localhost
@@ -1107,7 +1107,7 @@ void	Client::chargeBody()
 	else if (bytesRead == 0)
 	{
 		// cliente cerró la conexión: marcar error para que el main limpie
-        this->_status = 0; // o usa un flag específico; main debe detectar bytes==0 y cerrar
+        this->_status = 200; // o usa un flag específico; main debe detectar bytes==0 y cerrar
         // marca header/body como no listos y deja que main elimine este Client
         return;
 	}
@@ -1189,10 +1189,36 @@ void	Client::handleDelete()
 	_status = 204;
 }
 
-bool	Client::handleErrors()
+void	Client::chargeStatusData(std::map<std::pair<int, int>, std::string>& errorPages)
 {
-	if (_isLocation)
-	if (this->_status >= 300 && this->_status < 600)
+	std::map<std::pair<int, int>, std::string>::const_iterator it = errorPages.begin();
+	std::map<std::pair<int, int>, std::string>::const_iterator end = errorPages.end();
+
+	for (; it != end; ++it)
+	{
+		if (it->first.first == _status)
+		{
+			if (it->first.first != it->first.second)
+				_status = it->first.second;
+			_headerContent.path = it->second;
+		}
+	}
+	//cambiar para que funciona con referencias constantes
+}
+
+void	Client::handleErrors()
+{
+	if (_isLocation && _location.areErrorPages)
+	{
+		chargeStatusData(_location.error_pages);
+		return ;
+	}
+	if (_listener.getConfig().areErrorPages)
+	{
+		chargeStatusData(_listener.getConfig().error_pages);
+		return ;
+	}
+	/*if (this->_status >= 300 && this->_status < 600)
 	{
 		std::ostringstream hs;
 		hs << this->_headerContent.protocol << " " << this->_status << " " << reasonPhrase(this->_status) << "\r\n";
@@ -1201,9 +1227,7 @@ bool	Client::handleErrors()
 		_sendBuffer += hs.str();
 		_isSent = true;
 		flushResponse();
-		return true;
-	}
-	return false;
+	}*/
 }
 
 void	Client::sendResponse()
@@ -1212,16 +1236,14 @@ void	Client::sendResponse()
 	if (_sendBuffer.empty())
 	{
 		// If an error was already set before preparing response, send that error code
-		if (handleErrors())
-			return;
+		handleErrors();
 		
 
 		// Handle DELETE specially: do not load the file content before attempting to delete it
 		if (this->_headerContent.method == "DELETE")
 		{
 			handleDelete();
-			if (handleErrors())
-				return ; // send error if delete failed, or 204 No Content if succeeded
+			handleErrors(); // send error if delete failed, or 204 No Content if succeeded
 			// Success: 204 No Content
 			std::ostringstream hs;
 			hs << this->_headerContent.protocol << " 204 " << reasonPhrase(204) << "\r\n";
@@ -1343,9 +1365,9 @@ void	Client::sendResponse()
 		}
 
 		// Default response for successful GET/HEAD/POST is 200
-		int status = 200;
+		_status = 200;
 		std::ostringstream hs;
-		hs << this->_headerContent.protocol << " " << status << " " << reasonPhrase(status) << "\r\n";
+		hs << this->_headerContent.protocol << " " << _status << " " << reasonPhrase(_status) << "\r\n";
 		hs << "Content-Length: " << body.size() << "\r\n";
 		// === INSERT SWITCH BY HTTP METHOD HERE ===
 		// Single-line notes for implementation:

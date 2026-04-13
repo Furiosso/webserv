@@ -68,7 +68,8 @@ public:
 	void	setFd(int fd);
 	int		getFd() const;
 
-	const	ServerConfig&	getConfig()const;
+	ServerConfig&	getConfig();
+	//volver a la version anterior en el que devuelve una referencia constante y el método es constante una vez esté correctamente configurada el método charge status data en la clase Client
 };
 
 #endif

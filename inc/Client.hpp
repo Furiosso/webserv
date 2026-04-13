@@ -37,7 +37,6 @@ class Client
 private:
 	Server					_listener;
 	int						_fd;
-	//int						_status;
 	char					_buffer[4096]; // establecer una macro para el tamaño del buffer
 	std::string				_request[2];
 	int						_status;
@@ -73,7 +72,8 @@ public:
 	void		handleCgiIfNeeded();
 	std::string	joinPath(const std::string& a, const std::string& b);
 	bool		startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter);
-	bool		handleErrors();
+	void		handleErrors();
+	void		chargeStatusData(std::map<std::pair<int, int>, std::string>& errorPages);
     void		handleCgiFdEvent(int fd, short revents);
     void		finalizeCgiIfDone();
     int			getCgiInFd() const;

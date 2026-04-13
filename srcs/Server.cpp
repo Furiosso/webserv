@@ -81,9 +81,10 @@ void	Server::setAllowedMethods(const std::vector<std::string>& m)
 	_config.allowed_methods = m;
 }
 
-const ServerConfig&	Server::getConfig()const
+ServerConfig&	Server::getConfig()
 {
 	return _config;
+	//volver a la version anterior en el que devuelve una referencia constante y el método es constante una vez esté correctamente configurada el método charge status data en la clase Client
 }
 
 void	Server::setFd(int fd)

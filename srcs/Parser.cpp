@@ -1,6 +1,6 @@
 #include "Parser.hpp"
 
-int     getState(int prev, int pos)
+int getState(int prev, int pos)
 {
     static int tokens[][11] = {
         {S_ERR, S_SER, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR, S_ERR}, //  0 INI
@@ -687,7 +687,10 @@ void    Parser::errorPageLocParser(std::vector<std::string>::iterator& it, Locat
     if (getTypeOfItem(*(it - 1)) != 3)
         throw std::exception();
 	else
+    {
 		loc.error_pages.insert(std::pair<std::pair<int, int>, std::string>(ovr, *(it - 1)));
+        loc.areErrorPages = true;
+    }
 }
 
 int Parser::getLocationState(int prev, int pos)
