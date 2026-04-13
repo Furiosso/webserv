@@ -13,6 +13,7 @@ Server::Server()
 	_config.isRoot = false;
 	_config.isAlias = false;
 	_config.isAutoindex = false;
+	_config.areErrorPages = false;
 	_config.client_max_body_size = 1048576;
 }
 
@@ -64,9 +65,10 @@ void	Server::setClientMaxBodySize(long cmbs, char c)
 	_config.client_max_body_size = cmbs;
 }
 
-void	Server::addErrorPage(int code, std::string& uri)
+void	Server::addErrorPage(std::pair<int, int> codes, std::string& uri)
 {
-	_config.error_pages.insert(std::pair<int, std::string>(code, uri));
+	_config.error_pages.insert(std::pair<std::pair<int, int>, std::string>(codes, uri));
+	_config.areErrorPages = true;
 }
 
 void	Server::addLocation(LocationConfig& loc)

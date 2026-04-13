@@ -7,39 +7,41 @@
 
 struct LocationConfig
 {
-	std::string							path;
-	std::string							root;
-	//std::string							alias;
-	std::vector<std::string>			index;
-	std::vector<std::string>			allowed_methods;
-    std::map<std::string, std::string>	cgi;
-	std::map<int, std::string>			error_pages;
-	size_t								client_max_body_size;
-	bool								autoindex;
-	bool								isAutoindex;
-	//bool								isRootOrAlias;
-	bool								isRoot;
-	bool								isAlias;
+	std::string									path;
+	std::string									root;
+	//std::string								alias;
+	std::vector<std::string>					index;
+	std::vector<std::string>					allowed_methods;
+    std::map<std::string, std::string>			cgi;
+	std::map<std::pair<int, int>, std::string>	error_pages;
+	bool										areErrorPages;
+	size_t										client_max_body_size;
+	bool										autoindex;
+	bool										isAutoindex;
+	//bool										isRootOrAlias;
+	bool										isRoot;
+	bool										isAlias;
 };
 
 
 struct ServerConfig
 {
-    std::multimap<std::string, std::string>	listen;
-    std::map<std::string, std::string>		cgi;
-    std::vector<std::string>				index;
-	bool									autoindex;
-	std::map<int, std::string>				error_pages;
-	std::string								root;
+    std::multimap<std::string, std::string>		listen;
+    std::map<std::string, std::string>			cgi;
+    std::vector<std::string>					index;
+	bool										autoindex;
+	std::map<std::pair<int, int>, std::string>	error_pages;
+	bool										areErrorPages;
+	std::string									root;
 	//std::string								alias;
-	std::string								server_name;
-	size_t									client_max_body_size;
-	std::vector<LocationConfig>				locations;
-	std::vector<std::string>				allowed_methods;
-	bool									isAutoindex;
-	bool									isRoot;
-	bool									isAlias;
-	//bool									isRootOrAlias; // if true
+	std::string									server_name;
+	size_t										client_max_body_size;
+	std::vector<LocationConfig>					locations;
+	std::vector<std::string>					allowed_methods;
+	bool										isAutoindex;
+	bool										isRoot;
+	bool										isAlias;
+	//bool										isRootOrAlias; // if true
 };
 
 
@@ -60,7 +62,7 @@ public:
 	void	setRoot(std::string& r, int n);
 	void	setServerName(std::string& sn);
 	void	setClientMaxBodySize(long cmbs, char c);
-	void	addErrorPage(int code, std::string& uri);
+	void	addErrorPage(std::pair<int, int> codes, std::string& uri);
 	void	addLocation(LocationConfig& loc);
 	void	setAllowedMethods(const std::vector<std::string>& m);
 	void	setFd(int fd);

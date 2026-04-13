@@ -19,6 +19,11 @@ const fileInputText = document.getElementById("fileInputText");
 const fileInputLabel = document.querySelector(".file-input-label");
 const preview = document.getElementById("preview");
 const fileInfo = document.getElementById("fileInfo");
+// Explicit references for upload controls
+const uploadForm = document.getElementById("uploadForm");
+const uploadBtn = document.getElementById("uploadBtn");
+const uploadBtnText = document.getElementById("uploadBtnText");
+const uploadResult = document.getElementById("uploadResult");
 
 fileInput.addEventListener("change", function (e) {
 	const file = e.target.files[0];
@@ -70,7 +75,6 @@ fileInput.addEventListener("change", function (e) {
 uploadForm.addEventListener("submit", async function (e) {
 	e.preventDefault();
 
-	const formData = new FormData(uploadForm);
 	const file = fileInput.files[0];
 
 	if (!file) {
@@ -83,9 +87,19 @@ uploadForm.addEventListener("submit", async function (e) {
 	uploadResult.classList.add("hidden");
 
 	try {
-		const response = await fetch("/upload", {
+		// Send raw file bytes to /upload/<filename> so the server writes into that file
+		// The current C++ handler does not parse multipart/form-data and will
+		// reject POSTs addressed to a directory (e.g. POST /upload). Sending
+		// the file to /upload/<filename> with the file as the request body
+		// matches how the server expects to receive and store uploaded data.
+		const url = "/upload/" + encodeURIComponent(file.name);
+		const response = await fetch(url, {
 			method: "POST",
-			body: formData,
+			headers: {
+				// let the server know the mime type; Content-Length is set by the browser
+				"Content-Type": file.type || "application/octet-stream"
+			},
+			body: file,
 		});
 
 		if (response.ok) {
@@ -103,7 +117,28 @@ uploadForm.addEventListener("submit", async function (e) {
 			showUploadMessage(`❌ Upload failed: ${response.status} ${response.statusText}`, "error");
 		}
 	} catch (error) {
-		showUploadMessage(`❌ Network error: ${error.message}`, "error");
+		// Fallback: server may have accepted and stored the file but the
+		// connection was closed before the browser resolved the response.
+		// Try a quick GET to /upload/<filename> to confirm presence.
+		try {
+			const checkUrl = "/upload/" + encodeURIComponent(file.name);
+			const headRes = await fetch(checkUrl, { method: "GET" });
+			if (headRes.ok) {
+				showUploadMessage(`✅ File "${file.name}" uploaded successfully (verified)`, "success");
+				// keep same cleanup behavior
+				setTimeout(() => {
+					uploadForm.reset();
+					fileInputText.textContent = "Choose a file...";
+					fileInputLabel.classList.remove("has-file");
+					preview.innerHTML = '<span id="previewPlaceholder" class="text-text-secondary">No file selected</span>';
+					fileInfo.textContent = "";
+				}, 10000);
+			} else {
+				showUploadMessage(`❌ Network error: ${error.message}`, "error");
+			}
+		} catch (e2) {
+			showUploadMessage(`❌ Network error: ${error.message}`, "error");
+		}
 	} finally {
 		uploadBtn.disabled = false;
 		uploadBtnText.textContent = "📤 Upload File";

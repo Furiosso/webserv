@@ -427,15 +427,14 @@ int    Parser::getErrorPageParserState(int prev, int pos)
         {EP_ERR, EP_ERR, EP_ERR, EP_URI}, // EP_OVR
         {EP_ERR, EP_ERR, EP_ERR, EP_ERR}  // EP_URI
     };
-    
     return matrix[prev][pos];
 }
 
 void    Parser::errorpageParser(std::vector<std::string>::iterator& it, Server& server)
 {
-    int         pos;
-    int         prev = 0;
-	std::string	ovr;
+    int                                 pos;
+    int                                 prev = 0;
+	std::pair<int, int> ovr;
 
     ++it;
     while (*it != ";")
@@ -445,18 +444,18 @@ void    Parser::errorpageParser(std::vector<std::string>::iterator& it, Server& 
         if (prev == 0)
             throw std::exception();
 		if (prev == 1)
-			ovr = *it;
-		if (prev == 2)
-		{
-			ovr = *it;
-			ovr = ovr.substr(1, ovr.length());
-		}
+        {
+			ovr.first = std::atoi(it->c_str());
+            ovr.second = std::atoi(it->c_str());
+        }
+        if (prev == 2)
+			ovr.second = std::atoi(it->substr(1, it->length()).c_str());
         ++it;
     }
     if (getTypeOfItem(*(it - 1)) != 3)
         throw std::exception();
 	else
-		server.addErrorPage(std::atoi(ovr.c_str()), *(it - 1));
+		server.addErrorPage(ovr, *(it - 1));
 }
 
 int		Parser::getIndexState(int prev, int pos)
@@ -664,9 +663,9 @@ void	Parser::allowedLocParser(std::vector<std::string>::iterator& it, LocationCo
 
 void    Parser::errorPageLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc)
 {
-    int pos;
-    int prev = 0;
-	std::string	ovr;
+    int                 pos;
+    int                 prev = 0;
+	std::pair<int, int>	ovr;
 
     ++it;
 	loc.error_pages.clear();
@@ -677,18 +676,18 @@ void    Parser::errorPageLocParser(std::vector<std::string>::iterator& it, Locat
         if (prev == 0)
             throw std::exception();
 		if (prev == 1)
-			ovr = *it;
+        {
+            ovr.first = std::atoi(it->c_str());
+            ovr.second = std::atoi(it->c_str());
+        }
 		if (prev == 2)
-		{
-			ovr = *it;
-			ovr = ovr.substr(1, ovr.length());
-		}
+			ovr.second = std::atoi(it->substr(1, it->length()).c_str());
         ++it;
     }
     if (getTypeOfItem(*(it - 1)) != 3)
         throw std::exception();
 	else
-		loc.error_pages.insert(std::pair<int, std::string>(std::atoi(ovr.c_str()), *(it - 1)));
+		loc.error_pages.insert(std::pair<std::pair<int, int>, std::string>(ovr, *(it - 1)));
 }
 
 int Parser::getLocationState(int prev, int pos)
@@ -757,6 +756,7 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
 	loc.cgi = server.getConfig().cgi;
 	loc.autoindex = server.getConfig().autoindex;
 	loc.error_pages = server.getConfig().error_pages;
+    loc.areErrorPages = server.getConfig().areErrorPages;
 	loc.isAutoindex = server.getConfig().isAutoindex;
 	loc.client_max_body_size =  server.getConfig().client_max_body_size;
 	while (*it != "}")

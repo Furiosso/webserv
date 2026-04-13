@@ -5,7 +5,7 @@
 #include <string>
 #include "Parser.hpp"
 #include "Server.hpp"
-#include "RequestHandler.hpp"
+#include "Client.hpp"
 
 
 //AUXILIAR PARA PRINTEO DE SERVER
@@ -62,9 +62,9 @@ int main (int argc, char** argv, char** env)
             std::cout << "\n";
 
             std::cout << "Error pages:\n";
-            for (std::map<int, std::string>::const_iterator it = cfg.error_pages.begin();
+            for (std::map<std::pair<int, int>, std::string>::const_iterator it = cfg.error_pages.begin();
                  it != cfg.error_pages.end(); ++it)
-                std::cout << "  " << it->first << " -> " << it->second << "\n";
+                std::cout << "  " << it->first.first << " | " << it->first.second << " -> " << it->second << "\n";
 
             //std::cout << "isRootOrAlias: " << cfg.isRootOrAlias << "\n";
 
@@ -87,9 +87,8 @@ int main (int argc, char** argv, char** env)
                      it != loc.cgi.end(); ++it)
                     std::cout << "      " << it->first << " -> " << it->second << "\n";
                 std::cout << "    Error pages:\n";
-                for (std::map<int, std::string>::const_iterator it = loc.error_pages.begin();
-                     it != loc.error_pages.end(); ++it)
-                    std::cout << "      " << it->first << " -> " << it->second << "\n";
+                for (std::map<std::pair<int, int>, std::string>::const_iterator it = loc.error_pages.begin(); it != loc.error_pages.end(); ++it)
+                    std::cout << "      " << it->first.first << " | " << it->first.second << " -> " << it->second << "\n";
                 std::cout << "    Autoindex: " << loc.autoindex << "\n";
                 //std::cout << "    isRootOrAlias: " << loc.isRootOrAlias << "\n";
             }
@@ -103,7 +102,7 @@ int main (int argc, char** argv, char** env)
             return 1;
         }
         std::vector<struct pollfd> pollfds = sockman.getPollfds();
-        std::vector<RequestHandler> clients;
+        std::vector<Client> clients;
         // Map CGI fds (in_fd/out_fd) to client index in `clients` vector
         std::map<int, size_t> cgiFdToClientIdx;
 
@@ -182,7 +181,7 @@ int main (int argc, char** argv, char** env)
 								{
                                     std::cout << "fd server = " << fd << std::endl;
                                     try {
-                                        clients.push_back(RequestHandler(servers[j], client_fd));
+                                        clients.push_back(Client(servers[j], client_fd));
                                     }
                                     catch (const std::exception& e) {
                                         std::cerr << "Failed to store client: " << e.what() << std::endl;
@@ -192,6 +191,23 @@ int main (int argc, char** argv, char** env)
                                     std::cout << "cualquier tonteria AQUI\n";
                                     // charge header on the in-place constructed client
                                     clients.back().chargeHeader();
+									//Si peta borrar hasta linea 210-211
+									std::string reqHost = clients.back().getHeaderHost(); // requiere getHeaderHost()
+    								if (!reqHost.empty()) {
+    								    // Buscar entre servers el que tenga server_name == reqHost
+    								    bool found = false;
+    								    for (size_t k = 0; k < servers.size(); ++k) {
+    								        const ServerConfig& cfg = servers[k].getConfig();
+    								        // Sólo considerar servidores que escuchan en el mismo listener fd
+    								        // (el server por defecto para este client es servers[j]; aquí comprobamos coincidencias globales)
+    								        if (cfg.server_name == reqHost) {
+    								            clients.back().setListener(servers[k]); // requiere setListener(const Server&)
+    								            found = true;
+    								            break;
+    								        }
+    								    }
+    								    // si no se encontró, se mantiene el server por defecto asignado al cliente
+    								}
                                     // After parsing headers, try to read any immediately-available body
                                     clients.back().chargeBody();
                                     // If header is ready and either the method isn't POST or the body is ready, send now
@@ -226,7 +242,7 @@ int main (int argc, char** argv, char** env)
 						for (size_t j = 0; j < clients.size(); ++j)
 						{
                             //std::cout << "CACA cualquier tonteria AQUI\n";
-							//Imlementar en RequestHandler:
+							//Imlementar en Client:
 							// - handleRead(): recv() hasta terminar header/body o EGAIN
 							// - prepareResponse(): preparar datos a enviar
 							if (clients[j].getClientFd() == fd)
@@ -268,7 +284,7 @@ int main (int argc, char** argv, char** env)
 					{
 						if (clients[j].getClientFd() == pollfds[i].fd)
 						{
-							// Implementar en RequestHandler:
+							// Implementar en Client:
                             // - handleWrite(): write() hasta terminar o EAGAIN
                             // - isFinished(): true si respuesta enviada y cerrar según keep-alive*/
                             std::cout << "hace el pollout\n";

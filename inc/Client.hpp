@@ -16,6 +16,7 @@ struct HeaderContent
 	std::string path;
 	std::string	protocol;
 	std::string	root;
+	std::string	host;
 	bool		isAutoindexResponse;
 };
 
@@ -31,7 +32,7 @@ struct CgiState
     bool out_closed;
 };
 
-class RequestHandler
+class Client
 {
 private:
 	Server					_listener;
@@ -39,7 +40,7 @@ private:
 	//int						_status;
 	char					_buffer[4096]; // establecer una macro para el tamaño del buffer
 	std::string				_request[2];
-	int						_error;
+	int						_status;
 	std::string				_header;
 	std::string				_body;
 	bool					_isHeaderReady;
@@ -50,9 +51,11 @@ private:
 	std::string				_chunkLine;
 	std::string				_sendBuffer;
 	bool					_isSent;
+	LocationConfig			_location;
+	bool					_isLocation;
 public:
-	RequestHandler(Server& listener, int fd);
-	~RequestHandler();
+	Client(Server& listener, int fd);
+	~Client();
 	void		chargeHeader();
 	void		chargeBody();
 	void		checkContentLength(size_t num);
@@ -70,6 +73,7 @@ public:
 	void		handleCgiIfNeeded();
 	std::string	joinPath(const std::string& a, const std::string& b);
 	bool		startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter);
+	bool		handleErrors();
     void		handleCgiFdEvent(int fd, short revents);
     void		finalizeCgiIfDone();
     int			getCgiInFd() const;
@@ -81,8 +85,9 @@ public:
 	void		flushResponse();
 	std::string	generateDirectoryListing(const std::string& dirPath, const std::string& requestPath);
 	void		handleDelete();
+	std::string getHeaderHost() const;
+	void		setListener(const Server& s);
 
-	
 };
 
 

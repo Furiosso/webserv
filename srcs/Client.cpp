@@ -1,10 +1,10 @@
-#include "RequestHandler.hpp"
+#include "Client.hpp"
 #include <dirent.h>
 #include <iomanip>
 #include <new>
 #include <cstring>
 
-RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), _fd(fd), _error(0), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine(""), _isSent(false)
+Client::Client(Server& listener, int fd) : _listener(listener), _fd(fd), _status(0), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine(""), _isSent(false), _isLocation(false)
 {
 	_headerContent.isChunked = false;
 	_headerContent.ContentLength = 0;
@@ -17,7 +17,7 @@ RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), 
 	_cgi.out_closed = false;
 }
 
-RequestHandler::~RequestHandler()
+Client::~Client()
 {
 	if (_cgi.in_fd >= 0)
 	{
@@ -43,9 +43,13 @@ RequestHandler::~RequestHandler()
 	}
 }
 
-Server	RequestHandler::getListener() const { return _listener; }
+void Client::setListener(const Server& s) { this->_listener = s; }
 
-std::string RequestHandler::generateDirectoryListing(const std::string& dirPath, const std::string& requestPath)
+std::string Client::getHeaderHost() const { return this->_headerContent.host; }
+
+Server	Client::getListener() const { return _listener; }
+
+std::string Client::generateDirectoryListing(const std::string& dirPath, const std::string& requestPath)
 {
 	try {
 		DIR* dir = opendir(dirPath.c_str());
@@ -88,13 +92,13 @@ std::string RequestHandler::generateDirectoryListing(const std::string& dirPath,
 	}
 }
 
-void RequestHandler::setClientFd(int fd) { this->_fd = fd; }
+void Client::setClientFd(int fd) { this->_fd = fd; }
 
-int RequestHandler::getClientFd() const { return this->_fd; }
+int Client::getClientFd() const { return this->_fd; }
 
-bool RequestHandler::getIsHeaderReady() const { return this->_isHeaderReady; }
+bool Client::getIsHeaderReady() const { return this->_isHeaderReady; }
 
-bool RequestHandler::getIsBodyReady() const { return this->_isBodyReady; }
+bool Client::getIsBodyReady() const { return this->_isBodyReady; }
 
 static std::string getMimeType(const std::string& path)
 {
@@ -170,7 +174,7 @@ static std::string urlDecode(const std::string& s)
 	return out;
 }
 
-void RequestHandler::	chargeHeader()
+void Client::	chargeHeader()
 {
 	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
 	if (bytesRead < 0)
@@ -208,11 +212,11 @@ void RequestHandler::	chargeHeader()
 				}
 			}
 			// Otherwise, treat as client closed prematurely -> mark error so main will cleanup
-			this->_error = 400;
+			this->_status = 400;
 			return;
 		}
 		// For non-POST methods: mark as closed so main will cleanup
-		this->_error = 0;
+		this->_status = 0;
 		return;
 	}
 	else
@@ -248,10 +252,10 @@ void RequestHandler::	chargeHeader()
 				this->setPath();
 			} catch (const std::exception& e) {
 				std::cerr << "Exception in setPath(): " << e.what() << std::endl;
-				this->_error = 500;
+				this->_status = 500;
 			}
             std::cout << "CHARGE HEADER3\n";
-			std::cout << "error: " << this->_error << std::endl;
+			std::cout << "error: " << this->_status << std::endl;
 			std::cout << "header path: " << this->_headerContent.path << std::endl;
 			if (this->_headerContent.method == "POST")
 			{
@@ -310,7 +314,7 @@ void RequestHandler::	chargeHeader()
 	}
 }
 
-bool	RequestHandler::checkMethod(std::string& method, const std::vector<std::string>& vec)
+bool	Client::checkMethod(std::string& method, const std::vector<std::string>& vec)
 {
 	if (std::find(vec.begin(), vec.end(), method) == vec.end())
 		return false;
@@ -326,7 +330,7 @@ static bool setNonBlocking(int fd)
     return (fcntl(fd, F_SETFL, flags) != -1);
 }
 
-bool RequestHandler::startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter)
+bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter)
 {
 	int	inpipe[2];
 	int	outpipe[2];
@@ -381,27 +385,27 @@ bool RequestHandler::startCgiNonBlocking(const std::string& scriptPath, const st
 	return false;
 }
 
-int RequestHandler::getCgiInFd() const
+int Client::getCgiInFd() const
 {
 	return _cgi.in_fd;
 }
 
-std::string RequestHandler::getMethod() const
+std::string Client::getMethod() const
 {
 	return _headerContent.method;
 }
 
-int RequestHandler::getCgiOutFd() const
+int Client::getCgiOutFd() const
 {
 	return _cgi.out_fd;
 }
 
-bool RequestHandler::isCgiRunning() const
+bool Client::isCgiRunning() const
 {
 	return (_cgi.pid > 0);
 }
 
-void RequestHandler::handleCgiFdEvent(int fd, short revents)
+void Client::handleCgiFdEvent(int fd, short revents)
 {
 	if (!isCgiRunning())
 		return ;
@@ -477,7 +481,7 @@ void RequestHandler::handleCgiFdEvent(int fd, short revents)
 	finalizeCgiIfDone();
 }
 
-void RequestHandler::finalizeCgiIfDone()
+void Client::finalizeCgiIfDone()
 {
 	if (!isCgiRunning())
 		return ;
@@ -539,7 +543,7 @@ void RequestHandler::finalizeCgiIfDone()
 		}
 	}
 	this->_body = cgiBody;
-	this->_error = cgiStatus;
+	this->_status = cgiStatus;
 	this->_isBodyReady = true;
 
 	if (_cgi.in_fd >= 0)
@@ -556,24 +560,24 @@ void RequestHandler::finalizeCgiIfDone()
     _cgi.out_closed = true;
 }
 
-void	RequestHandler::handleCgiIfNeeded()
+void	Client::handleCgiIfNeeded()
 {
 	if (checkExtention(this->_headerContent.path, ".py"))
 	{
 		std::string interp = "/usr/bin/python3";
 		if (!startCgiNonBlocking(this->_headerContent.path, interp))
-			_error = 500;
+			_status = 500;
 	}
 }
 
-void RequestHandler::parseHeader()
+void Client::parseHeader()
 {
 	std::vector<std::string>	tokens;
 	std::string					token;
 	std::string					line;
 	size_t						headerEnd;
 
-	if (this->_error != 0)
+	if (this->_status != 0)
 		return ;
 	headerEnd = this->_header.find("\r\n"); //Host: localhost\r\n
 	line = this->_header.substr(0, headerEnd); //Host: localhost
@@ -582,7 +586,7 @@ void RequestHandler::parseHeader()
 	if (wordCounter(line, ' ') != 3)
 	{
 		std::cout << "me cago en sus muertos sera aqui" << std::endl;
-		this->_error = 400;
+		this->_status = 400;
 		return ;
 	}
 	std::string::iterator	begin = line.begin();
@@ -598,7 +602,7 @@ void RequestHandler::parseHeader()
 	if (token != "GET" && token != "POST" && token != "DELETE" && token != "HEAD")
 	{	
 		std::cout << "que pasa\n";
-		this->_error = 405;
+		this->_status = 405;
 		return ;
 	}
 	// Allow HEAD when GET is allowed on the server/location
@@ -608,14 +612,14 @@ void RequestHandler::parseHeader()
 		if (checkMethod(getToken, _listener.getConfig().allowed_methods) == false)
 		{
 			std::cout << "hola\n";
-			_error = 405;
+			_status = 405;
 			return ;
 		}
 	}
 	else if (checkMethod(token, _listener.getConfig().allowed_methods) == false)
 	{
 		std::cout << "hola\n";
-		_error = 405;
+		_status = 405;
 		return ;
 	}
 	this->_headerContent.method = token;
@@ -632,7 +636,7 @@ void RequestHandler::parseHeader()
 	if (token[0] != '/')
 	{
 		std::cout << "seguro que es aqui" << std::endl;
-		_error = 400;
+		_status = 400;
 		return ;
 	}
 	this->_headerContent.path = urlDecode(token);
@@ -646,11 +650,32 @@ void RequestHandler::parseHeader()
 		token.push_back(*begin);
 	if (token != "HTTP/1.0" && token != "HTTP/1.1")
 	{
-		this->_error = 505;
+		this->_status = 505;
 		return ;
 	}
 	std::cout << "protocol: " << token << std::endl;
 	this->_headerContent.protocol = token;
+	// si falla eliminar hasta linea 674
+	std::string lower = strToLower(this->_header);
+    size_t pos = lower.find("host:");
+    if (pos != std::string::npos)
+    {
+        size_t valStart = pos + 5;
+        // avanzar sobre espacios
+        while (valStart < this->_header.size() && (this->_header[valStart] == ' ' || this->_header[valStart] == '\t'))
+            ++valStart;
+        size_t valEnd = this->_header.find("\r\n", valStart);
+        if (valEnd == std::string::npos) valEnd = this->_header.size();
+        std::string hostVal = this->_header.substr(valStart, valEnd - valStart);
+        // quitar posible :port
+        size_t colon = hostVal.find(':');
+        if (colon != std::string::npos)
+            hostVal = hostVal.substr(0, colon);
+	// trim simple (C++98 compatible)
+	while (!hostVal.empty() && (hostVal[0] == ' ' || hostVal[0] == '\t')) hostVal.erase(hostVal.begin());
+	while (!hostVal.empty() && (hostVal[hostVal.size() - 1] == ' ' || hostVal[hostVal.size() - 1] == '\t')) hostVal.erase(hostVal.end()-1);
+        this->_headerContent.host = hostVal;
+    }
 	while (*begin == ' ')
 		++begin;
 	begin += 2;
@@ -663,7 +688,7 @@ void RequestHandler::parseHeader()
 		if (colonPos == std::string::npos)
 		{
 			std::cout << "invalid header line: " << line << std::endl;
-			this->_error = 400;
+			this->_status = 400;
 			return ;
 		}
 		begin = line.begin();
@@ -710,7 +735,7 @@ void RequestHandler::parseHeader()
 		{
 			if (this->_headerContent.isChunked == true)
 			{
-				this->_error = 404;
+				this->_status = 404;
 				return ;
 			}
 			if (*(vegin + 1) == ":")
@@ -731,7 +756,7 @@ void RequestHandler::parseHeader()
 	}
 }
 
-void	RequestHandler::checkContentLength(size_t num)
+void	Client::checkContentLength(size_t num)
 {
 	const std::vector<LocationConfig>& locations = _listener.getConfig().locations;
 
@@ -747,18 +772,18 @@ void	RequestHandler::checkContentLength(size_t num)
 				&& it->client_max_body_size != 0
 				&& num > it->client_max_body_size)
 			{
-				this->_error = 413;
+				this->_status = 413;
 				return ;
 			}
 		}
 	}
 	if (this->_listener.getConfig().client_max_body_size != 0
 		&& num > this->_listener.getConfig().client_max_body_size)
-		this->_error = 413;
+		this->_status = 413;
 }
 
 
-void	RequestHandler::setPath()
+void	Client::setPath()
 {
 	const std::vector<LocationConfig>& locations = _listener.getConfig().locations;
 
@@ -775,6 +800,8 @@ void	RequestHandler::setPath()
 			std::cout << "it->path: " << it->path << " | _headerContent.path: " << _headerContent.path << " | path.size: " << it->path.size() << " | headercontent.path.size: " << _headerContent.path.size() << " | compare: " << _headerContent.path.compare(0, it->path.size(), it->path) << std::endl;
 			if (it->path.size() <= _headerContent.path.size() && _headerContent.path.compare(0, it->path.size(), it->path) == 0)
 			{
+				_isLocation = true;
+				_location = *it;
 				std::cout << "it->path: " << it->path << std::endl;
 				if (checkMethod(_headerContent.method, it->allowed_methods) == false)
 				{
@@ -783,7 +810,7 @@ void	RequestHandler::setPath()
 					{
 						std::cout << it->allowed_methods[i] << std::endl;
 					}
-					_error = 405;
+					_status = 405;
 					return ;
 				}
 				if (!_listener.getConfig().index.empty())
@@ -924,7 +951,7 @@ static bool	isWithinRoot(const std::string& candidate, const std::string& root)
 	return false;
 }
 
-void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex, const std::string& root)
+void	Client::checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex, const std::string& root)
 {
 	struct stat st;
 
@@ -934,13 +961,13 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 		{
 			if (access(path.c_str(), R_OK) != 0)
 			{
-				_error = 404;
+				_status = 404;
 				return ;
 			}
 			if (!isWithinRoot(path, root))
 			{
 				//std::cout << "sale por aqui. Path: " << path << ". Root: " << root << std::endl;
-				_error = 403;
+				_status = 403;
 				return ;
 			}
 			return ;
@@ -959,13 +986,13 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 					{
 						if (access(joinPath(path, *it).c_str(), R_OK) != 0 && this->_headerContent.method != "POST")
 						{
-							_error = 404;
+							_status = 404;
 							return ;
 						}
 						if (!isWithinRoot(joinPath(path, *it), root) && this->_headerContent.method != "POST")
 						{
 							std::cout << "PATH EN IF: " << path << std::endl; 
-							_error = 403;
+							_status = 403;
 							return ;
 						}
 						std::cout << "DENTRO DE IF\n";
@@ -990,7 +1017,7 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 			else
 			{
 				std::cout << "sale por aqui. Path: " << path << ". Root: " << root << std::endl;
-				_error = 403;
+				_status = 403;
 			}
 			return ;
 		}
@@ -1000,10 +1027,10 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 	if (this->_headerContent.method == "POST")
 		return;
 
-	_error = 404;
+	_status = 404;
 }
 
-std::string	RequestHandler::joinPath(const std::string& a, const std::string& b) // revisar esta funcion
+std::string	Client::joinPath(const std::string& a, const std::string& b) // revisar esta funcion
 {
     if (a[a.size() - 1] == '/')
 	{
@@ -1012,7 +1039,7 @@ std::string	RequestHandler::joinPath(const std::string& a, const std::string& b)
 	return a + "/" + b;
 }
 
-void	RequestHandler::chunkManagement() //corregir esto
+void	Client::chunkManagement() //corregir esto
 {
 	size_t		i;
 	size_t		sublen;
@@ -1032,7 +1059,7 @@ void	RequestHandler::chunkManagement() //corregir esto
 			{
 				if (this->_chunkLine[0] != '\r' || this->_chunkLine[1] != '\n')
     			{
-        			this->_error = 400;
+        			this->_status = 400;
         			return ;
     			}
             	this->_chunkLine.erase(0, 2);
@@ -1053,7 +1080,7 @@ void	RequestHandler::chunkManagement() //corregir esto
 		if (this->_chunkLine[this->_chunkLen] != '\r'
 			|| this->_chunkLine[this->_chunkLen + 1] != '\n')
 		{
-    		this->_error = 400;
+    		this->_status = 400;
     		return ;
 		}
 		this->_body += this->_chunkLine.substr(0, sublen);
@@ -1062,7 +1089,7 @@ void	RequestHandler::chunkManagement() //corregir esto
 	}
 }
 
-void	RequestHandler::chargeBody()
+void	Client::chargeBody()
 {
 	if (this->_headerContent.method != "POST")
 		return ;
@@ -1080,8 +1107,8 @@ void	RequestHandler::chargeBody()
 	else if (bytesRead == 0)
 	{
 		// cliente cerró la conexión: marcar error para que el main limpie
-        this->_error = 0; // o usa un flag específico; main debe detectar bytes==0 y cerrar
-        // marca header/body como no listos y deja que main elimine este RequestHandler
+        this->_status = 0; // o usa un flag específico; main debe detectar bytes==0 y cerrar
+        // marca header/body como no listos y deja que main elimine este Client
         return;
 	}
 	else
@@ -1106,7 +1133,7 @@ void	RequestHandler::chargeBody()
 	}
 }
 
-void	RequestHandler::flushResponse()
+void	Client::flushResponse()
 {
 	ssize_t		bytesSent;
 
@@ -1123,7 +1150,7 @@ void	RequestHandler::flushResponse()
 	_isSent = _sendBuffer.empty();
 }
 
-void	RequestHandler::handleDelete()
+void	Client::handleDelete()
 {
 	struct stat s;
 	// Enforce server root only: do not allow DELETE outside the server's root,
@@ -1133,68 +1160,68 @@ void	RequestHandler::handleDelete()
 	{
 		//std::cout << "EL PUTO ROOT: " << root << "	EL PUTO PATH: " << _headerContent.path << std::endl;
 		//std::cout << "EL BICHOOOOOOOOOOOOOOOOOOOOOOOOOOOO" << std::endl;
-		_error = 403;
+		_status = 403;
 		return;
 	}
 	if (stat(_headerContent.path.c_str(), &s) != 0)
 	{
 		if (errno == ENOENT)
-			_error = 404;
+			_status = 404;
 		else
-			_error = 500;
+			_status = 500;
 		return;
 	}
 	if (S_ISDIR(s.st_mode))
 	{
-		_error = 403;
+		_status = 403;
 		return;
 	}
 	if (std::remove(_headerContent.path.c_str()) != 0)
 	{
 		if (errno == ENOENT)
-			_error = 404;
+			_status = 404;
 		else if (errno == EACCES || errno == EPERM)
-			_error = 403;
+			_status = 403;
 		else
-			_error = 500;
+			_status = 500;
 		return;
 	}
-	_error = 204;
+	_status = 204;
 }
 
-void	RequestHandler::sendResponse()
+bool	Client::handleErrors()
+{
+	if (_isLocation)
+	if (this->_status >= 300 && this->_status < 600)
+	{
+		std::ostringstream hs;
+		hs << this->_headerContent.protocol << " " << this->_status << " " << reasonPhrase(this->_status) << "\r\n";
+		hs << "Connection: close\r\n";
+		hs << "Content-Length: 0\r\n\r\n";
+		_sendBuffer += hs.str();
+		_isSent = true;
+		flushResponse();
+		return true;
+	}
+	return false;
+}
+
+void	Client::sendResponse()
 {	
 	std::cout << "ENTER sendResponse for fd " << this->_fd << " method=" << this->_headerContent.method << "\n";
 	if (_sendBuffer.empty())
 	{
 		// If an error was already set before preparing response, send that error code
-		if (this->_error >= 300 && this->_error < 600)
-		{
-			std::ostringstream hs;
-			hs << this->_headerContent.protocol << " " << this->_error << " " << reasonPhrase(this->_error) << "\r\n";
-			hs << "Connection: close\r\n";
-			hs << "Content-Length: 0\r\n\r\n";
-			_sendBuffer += hs.str();
-			_isSent = true;
-			flushResponse();
+		if (handleErrors())
 			return;
-		}
+		
 
 		// Handle DELETE specially: do not load the file content before attempting to delete it
 		if (this->_headerContent.method == "DELETE")
 		{
 			handleDelete();
-			if (this->_error >= 300 && this->_error < 600)
-			{
-				std::ostringstream hs;
-				hs << this->_headerContent.protocol << " " << this->_error << " " << reasonPhrase(this->_error) << "\r\n";
-				hs << "Connection: close\r\n";
-				hs << "Content-Length: 0\r\n\r\n";
-				_sendBuffer += hs.str();
-				_isSent = true;
-				flushResponse();
-				return;
-			}
+			if (handleErrors())
+				return ; // send error if delete failed, or 204 No Content if succeeded
 			// Success: 204 No Content
 			std::ostringstream hs;
 			hs << this->_headerContent.protocol << " 204 " << reasonPhrase(204) << "\r\n";
@@ -1212,10 +1239,10 @@ void	RequestHandler::sendResponse()
 			std::string serverRoot = _listener.getConfig().root;
 			if (!isWithinRoot(_headerContent.path, serverRoot))
 			{
-				this->_error = 403;
+				this->_status = 403;
         		// prepare error response (ya lo manejas más arriba)
         		std::ostringstream hs;
-        		hs << this->_headerContent.protocol << " " << this->_error << " " << reasonPhrase(this->_error) << "\r\n";
+        		hs << this->_headerContent.protocol << " " << this->_status << " " << reasonPhrase(this->_status) << "\r\n";
         		hs << "Connection: close\r\n";
         		hs << "Content-Length: 0\r\n\r\n";
         		_sendBuffer += hs.str();
@@ -1227,7 +1254,7 @@ void	RequestHandler::sendResponse()
 			bool existed = (stat(this->_headerContent.path.c_str(), &st) == 0);
 			if (existed && S_ISDIR(st.st_mode))
 			{
-				_error = 403;
+				_status = 403;
 				return;
 			}
 			std::string ext = getExtension(_headerContent.path);
@@ -1237,7 +1264,7 @@ void	RequestHandler::sendResponse()
     		    // start CGI non-blocking (body already in _body)
     		    if (!startCgiNonBlocking(this->_headerContent.path, cgiMap[ext]))
     		    {
-    		        this->_error = 500;
+    		        this->_status = 500;
     		        return;
     		    }
     		    // response will be produced when CGI finishes (finalizeCgiIfDone)
@@ -1250,9 +1277,9 @@ void	RequestHandler::sendResponse()
 			}
 			if (fd < 0)
 			{
-				if (errno == EACCES || errno == EPERM) this->_error = 403;
-        		else if (errno == ENOENT) this->_error = 404;
-        		else this->_error = 500;
+				if (errno == EACCES || errno == EPERM) this->_status = 403;
+        		else if (errno == ENOENT) this->_status = 404;
+        		else this->_status = 500;
 				return ;
 			}
 			ssize_t to_write = _body.size();
@@ -1264,7 +1291,7 @@ void	RequestHandler::sendResponse()
         		if (w <= 0)
         		{
         		    close(fd);
-        		    this->_error = 500;
+        		    this->_status = 500;
         		    return;
         		}
         		written += w;
@@ -1306,7 +1333,7 @@ void	RequestHandler::sendResponse()
 				body = generateDirectoryListing(this->_headerContent.path, requestPath);
 			} catch (const std::bad_alloc& e) {
 				std::cerr << "sendResponse: std::bad_alloc while preparing autoindex for " << this->_headerContent.path << "\n";
-				this->_error = 500;
+				this->_status = 500;
 				body.clear();
 			}
 		}
@@ -1326,7 +1353,7 @@ void	RequestHandler::sendResponse()
 		// 2) For GET: if file -> body as loaded; if dir+autoindex -> body already generated above; set status 200.
 		// 3) For HEAD: same as GET but do not append body later (respect method when adding body to _sendBuffer).
 		// 4) For POST: if CGI -> initiate startCgiNonBlocking(...) here (only after body received) and set up _cgi.write_buf; set appropriate status (201/200) or delegate to CGI handling.
-		// 5) For DELETE: try unlink(joinPath(root, requested)); set _error = 204 on success or 404/403 on failure.
+		// 5) For DELETE: try unlink(joinPath(root, requested)); set _status = 204 on success or 404/403 on failure.
 		// 6) Ensure any filesystem ops check isWithinRoot(...) and access(..., R_OK/W_OK) before acting.
 		// 7) After switch, prepare `body` (or leave empty for HEAD/204) and set content-type accordingly.
 		// 8) Do NOT block for long operations; prefer non-blocking or spawn CGI as done elsewhere.
@@ -1345,7 +1372,7 @@ void	RequestHandler::sendResponse()
 	flushResponse();
 }
 
-/*std::string	RequestHandler::loadContent(const std::string& filename) const
+/*std::string	Client::loadContent(const std::string& filename) const
 {
 	std::ifstream	file(filename.c_str(), std::ios::binary);
 
@@ -1358,7 +1385,7 @@ void	RequestHandler::sendResponse()
 	return buffer;
 }*/
 
-std::string	RequestHandler::loadContent(const std::string& filename) const
+std::string	Client::loadContent(const std::string& filename) const
 {
 	std::ifstream	file(filename.c_str(), std::ios::binary);
 
@@ -1383,6 +1410,5 @@ std::string	RequestHandler::loadContent(const std::string& filename) const
 }
 
 
-
-bool	RequestHandler::getIsSent() const { return _isSent; }
+bool	Client::getIsSent() const { return _isSent; }
 
