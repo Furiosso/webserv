@@ -63,6 +63,7 @@ public:
 	bool		getIsHeaderReady() const;
 	bool		getIsBodyReady() const;
 	Server		getListener() const;
+	std::string	getMethod() const;
 	void		setPath();
 	bool		checkMethod(std::string& method, const std::vector<std::string>& vec);
 	void		checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex, const std::string& root);

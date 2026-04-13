@@ -149,6 +149,8 @@ int main (int argc, char** argv, char** env)
 
             for(std::vector<struct pollfd>::size_type i = 0; i < pollfds.size(); ++i)
             {
+                // Debug: show which fd has revents set
+                
                 //comprobar signals
                 if (pollfds[i].revents & POLLHUP)
 				{
@@ -190,8 +192,26 @@ int main (int argc, char** argv, char** env)
                                     std::cout << "cualquier tonteria AQUI\n";
                                     // charge header on the in-place constructed client
                                     clients.back().chargeHeader();
-                                    if (clients.back().getIsBodyReady() == true)
-                                        pollfds[pollfds.size() - 1].events = POLLOUT;
+                                    // After parsing headers, try to read any immediately-available body
+                                    clients.back().chargeBody();
+                                    // If header is ready and either the method isn't POST or the body is ready, send now
+                                    if (clients.back().getIsHeaderReady() == true
+                                        && (clients.back().getMethod() != "POST" || clients.back().getIsBodyReady() == true))
+                                    {
+                                        clients.back().sendResponse();
+                                        if (clients.back().getIsSent() == true)
+                                        {
+                                            close(pollfds[pollfds.size() - 1].fd);
+                                            std::swap(clients.back(), clients[clients.size() - 1]);
+                                            clients.pop_back();
+                                            std::swap(pollfds[pollfds.size() - 1], pollfds.back());
+                                            pollfds.pop_back();
+                                        }
+                                        else
+                                        {
+                                            pollfds[pollfds.size() - 1].events = POLLOUT;
+                                        }
+                                    }
                                     std::cout << "cualquier tonteria AQUI2\n";
 									break;
 								}

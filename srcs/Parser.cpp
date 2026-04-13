@@ -399,13 +399,20 @@ void	Parser::serverNameParser(std::vector<std::string>::iterator& it,Server& ser
 
 int     Parser::getTypeOfItem(std::string& str)
 {
-    if (str.size() == 3 && strIsDigit(str) && (str[0] == '3' || str[0] == '4' || str[0] == '5'))
+    if (str.size() == 3
+        && strIsDigit(str) 
+        && (str[0] == '3'
+            || str[0] == '4'
+            || str[0] == '5'))
         return 1;
-    if (str.size() == 4 && str[0] == '=' && strIsDigit(str.substr(1, 3)) && (str[1] == '1'
-        || str[1] == '2'
-        || str[1] == '3'
-        || str[1] == '4'
-        || str[1] == '5'))
+    if (str.size() == 4
+        && str[0] == '='
+        && strIsDigit(str.substr(1, 3))
+        && (str[1] == '1'
+            || str[1] == '2'
+            || str[1] == '3'
+            || str[1] == '4'
+            || str[1] == '5'))
     {
         return 2;
     }
@@ -426,8 +433,8 @@ int    Parser::getErrorPageParserState(int prev, int pos)
 
 void    Parser::errorpageParser(std::vector<std::string>::iterator& it, Server& server)
 {
-    int pos;
-    int prev = 0;
+    int         pos;
+    int         prev = 0;
 	std::string	ovr;
 
     ++it;

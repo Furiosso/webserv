@@ -2,10 +2,12 @@
 #include <dirent.h>
 #include <iomanip>
 #include <new>
+#include <cstring>
 
 RequestHandler::RequestHandler(Server& listener, int fd) : _listener(listener), _fd(fd), _error(0), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine(""), _isSent(false)
 {
 	_headerContent.isChunked = false;
+	_headerContent.ContentLength = 0;
 	_headerContent.isAutoindexResponse = false;
 	_cgi.pid = -1;
 	_cgi.in_fd = -1;
@@ -181,10 +183,37 @@ void RequestHandler::	chargeHeader()
 	}
 	else if (bytesRead == 0)
 	{
-		// cliente cerró la conexión: marcar error para que el main limpie
-        this->_error = 0; // o usa un flag específico; main debe detectar bytes==0 y cerrar
-        // marca header/body como no listos y deja que main elimine este RequestHandler
-        return;
+		// cliente cerró la conexión: puede significar EOF after body
+		if (this->_headerContent.method == "POST")
+		{
+			// If Content-Length was set and we've already read enough, mark body ready
+			if (!this->_headerContent.isChunked)
+			{
+				if (this->_headerContent.ContentLength != 0 && this->_body.size() >= this->_headerContent.ContentLength)
+				{
+					if (this->_body.size() > this->_headerContent.ContentLength)
+						this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
+					this->_isBodyReady = true;
+					this->_request[1] = this->_body;
+					std::cout << "chargeBody: EOF but body complete, size=" << this->_body.size() << "\n";
+					return;
+				}
+				// If no Content-Length (unlikely) but some body present, consider it ready
+				if (this->_headerContent.ContentLength == 0 && !this->_body.empty())
+				{
+					this->_isBodyReady = true;
+					this->_request[1] = this->_body;
+					std::cout << "chargeBody: EOF with body and no Content-Length, size=" << this->_body.size() << "\n";
+					return;
+				}
+			}
+			// Otherwise, treat as client closed prematurely -> mark error so main will cleanup
+			this->_error = 400;
+			return;
+		}
+		// For non-POST methods: mark as closed so main will cleanup
+		this->_error = 0;
+		return;
 	}
 	else
 	{
@@ -193,9 +222,26 @@ void RequestHandler::	chargeHeader()
 		if (this->_header.find("\r\n\r\n") != std::string::npos) // End of headers
 		{
 			size_t headerEnd = this->_header.find("\r\n\r\n");
-			this->_header = this->_header.substr(0, headerEnd);
+			// Preserve the full buffer so we can extract a body that may have
+			// been received together with the headers in the same recv().
+			std::string full = this->_header;
+			this->_header = full.substr(0, headerEnd);
+			std::cout << "chargeHeader: headerEnd=" << headerEnd << " full.size=" << full.size() << "\n";
             std::cout << "CHARGE HEADER1\n";
 			this->parseHeader();
+			// If client included 'Expect: 100-continue' we must acknowledge it
+			// so browsers will proceed to send the request body.
+			{
+				std::string lower = full;
+				lower = strToLower(lower);
+				if (lower.find("expect: 100-continue") != std::string::npos)
+				{
+					const char *cont = "HTTP/1.1 100 Continue\r\n\r\n";
+					ssize_t s = send(this->_fd, cont, std::strlen(cont), 0);
+					(void)s;
+				}
+			}
+			std::cout << "after parseHeader: ContentLength=" << this->_headerContent.ContentLength << " isChunked=" << this->_headerContent.isChunked << " method=" << this->_headerContent.method << "\n";
 			std::cout << this->_header << std::endl;
             std::cout << "CHARGE HEADER2\n";
 			try {
@@ -207,8 +253,54 @@ void RequestHandler::	chargeHeader()
             std::cout << "CHARGE HEADER3\n";
 			std::cout << "error: " << this->_error << std::endl;
 			std::cout << "header path: " << this->_headerContent.path << std::endl;
-			if(headerEnd + 4 < this->_header.size() && this->_headerContent.method == "POST")
-				this->_body = this->_header.substr(headerEnd + 4);
+			if (this->_headerContent.method == "POST")
+			{
+				if (headerEnd + 4 < full.size())
+				{
+					std::string extra = full.substr(headerEnd + 4);
+					// If Transfer-Encoding: chunked, feed chunk data into chunkLine and try to parse
+					if (this->_headerContent.isChunked)
+					{
+						this->_chunkLine += extra;
+						chunkManagement();
+					}
+					else
+					{
+						this->_body = extra;
+						// If we already have the full body according to Content-Length, mark ready
+						if (this->_headerContent.ContentLength != 0 && this->_body.size() >= this->_headerContent.ContentLength)
+						{
+							if (this->_body.size() > this->_headerContent.ContentLength)
+								this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
+							this->_isBodyReady = true;
+							this->_request[1] = this->_body;
+							std::cout << "CHARGE HEADER: body already complete, size=" << this->_body.size() << "\n";
+						}
+						else if (this->_body.size() > 0 && this->_headerContent.ContentLength == 0)
+						{
+							// Fallback: headers parsing didn't capture Content-Length but body bytes arrived
+							/*This branch triggers when some bytes have been accumulated in this->_body but the parsed headers report ContentLength == 0.
+							In that case the code treats the currently buffered bytes as the full request body: it sets headerContent.
+							ContentLength to the buffer size, marks the body ready with _isBodyReady = true, copies the buffer into _request[1], and emits a debug message with the size.
+							
+							The intent is a simple fallback for situations where header parsing failed to capture a Content-Length value (or the header was omitted) but body bytes nonetheless arrived.
+							By stamping the header with the observed length and marking the body ready, the rest of the request pipeline can proceed as if a Content-Length had been provided.
+							
+							Suggested improvements:
+							- verify the request method and Transfer-Encoding before applying this fallback
+								(only treat the buffer-as-body when HTTP framing semantics allow it, e.g., when the connection will be closed to signal end-of-body).
+							- Add size limits and validation, ensure request has the expected structure before writing to index 1, replace std::cout with a proper logger,
+								and add explicit handling for chunked encoding or for reading until connection close if Content-Length is absent.
+							These changes make the fallback safer and more robust.
+							*/
+							this->_headerContent.ContentLength = this->_body.size();
+							this->_isBodyReady = true;
+							this->_request[1] = this->_body;
+							std::cout << "CHARGE HEADER: fallback mark body ready, size=" << this->_body.size() << "\n";
+						}
+					}
+				}
+			}
 			this->_request[0] = this->_header.substr(0, this->_header.find("\r\n")); // Request line
 			_isHeaderReady = true;
 			if (_headerContent.method != "POST")
@@ -292,6 +384,11 @@ bool RequestHandler::startCgiNonBlocking(const std::string& scriptPath, const st
 int RequestHandler::getCgiInFd() const
 {
 	return _cgi.in_fd;
+}
+
+std::string RequestHandler::getMethod() const
+{
+	return _headerContent.method;
 }
 
 int RequestHandler::getCgiOutFd() const
@@ -599,12 +696,16 @@ void RequestHandler::parseHeader()
 		this->_header = this->_header.substr(this->_header.find("\r\n") + 2);
 		std::cout << "this->_header:\n" << this->_header  << std::endl << std::endl;
 	}
+	// Debug: dump parsed tokens for header inspection
+	/*std::cout << "DEBUG parseHeader: tokens(" << tokens.size() << ") = ";
+	for (size_t ti = 0; ti < tokens.size(); ++ti)
+		std::cout << "[" << tokens[ti] << "] ";
+	std::cout << "\n";*/
 	std::vector<std::string>::iterator	vegin = tokens.begin();
 	std::vector<std::string>::iterator	vend = tokens.end();
-	std::stringstream					ss;
-	size_t								num;
 	for (; vegin != vend; ++vegin) // revisar este bucle
 	{
+		//std::cout << "DEBUG token at vegin: '" << *vegin << "'\n";
 		if ((vegin + 1) != vend && (vegin + 2) != vend && strToLower(*vegin) == "content-length")
 		{
 			if (this->_headerContent.isChunked == true)
@@ -614,20 +715,17 @@ void RequestHandler::parseHeader()
 			}
 			if (*(vegin + 1) == ":")
 			{
-				ss << *(vegin + 2);
-				ss >> num;
+				size_t num = 0;
+				std::stringstream s(*(vegin + 2));
+				s >> num;
 				checkContentLength(num);
 				this->_headerContent.ContentLength = num;
 			}
 		}
 		if ((vegin + 1) != vend && (vegin + 2) != vend && strToLower(*vegin) == "transfer-encoding")
 		{
-			if (this->_headerContent.ContentLength == 0)
-			{
-				this->_error = 404;
-				return ;
-			}
-			if (*(vegin + 1) == ":" && *(vegin + 2) == "chunked")
+			// Do not require Content-Length when Transfer-Encoding: chunked is present.
+			if (*(vegin + 1) == ":" && strToLower(*(vegin + 2)) == "chunked")
 				this->_headerContent.isChunked = true;
 		}
 	}
@@ -857,14 +955,14 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 				for (; it != end; ++it)
 				{
 					std::cout << "index: " << joinPath(path, *it) << std::endl;
-					if (access(joinPath(path, *it).c_str(), F_OK) == 0)
+					if (access(joinPath(path, *it).c_str(), F_OK) == 0 || this->_headerContent.method == "POST")
 					{
-						if (access(joinPath(path, *it).c_str(), R_OK) != 0)
+						if (access(joinPath(path, *it).c_str(), R_OK) != 0 && this->_headerContent.method != "POST")
 						{
 							_error = 404;
 							return ;
 						}
-						if (!isWithinRoot(joinPath(path, *it), root))
+						if (!isWithinRoot(joinPath(path, *it), root) && this->_headerContent.method != "POST")
 						{
 							std::cout << "PATH EN IF: " << path << std::endl; 
 							_error = 403;
@@ -873,7 +971,14 @@ void	RequestHandler::checkPathValidity(std::string& path, std::vector<std::strin
 						std::cout << "DENTRO DE IF\n";
 						if (checkExtention(path, ".py") == true)
 							;//comprobar si el path tiene una extension para cgi
-						_headerContent.path = joinPath(_headerContent.path, *it);
+						// For POST requests we should not automatically map a directory to
+						// its index file; a POST to a directory usually means "create a new
+						// resource inside this directory". Mapping to index would make the
+						// server overwrite the index file.
+						if (this->_headerContent.method != "POST")
+							_headerContent.path = joinPath(_headerContent.path, *it);
+						// If method is POST, keep _headerContent.path pointing to the
+						// directory so later logic can create a new file inside it.
 						return ;
 					}
 				}
@@ -963,7 +1068,7 @@ void	RequestHandler::chargeBody()
 		return ;
 	//std::cout << "ENTER chargeBody fd=" << this->_fd << " path=" << this->_headerContent.path << "\n";
 	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
-	//std::cout << "recv returned " << bytesRead << "\n";
+	//std::cout << "chargeBody: recv returned " << bytesRead << " on fd=" << this->_fd << "\n";
 	if (bytesRead < 0)
 	{
 		// Non-blocking sockets will often return EAGAIN/EWOULDBLOCK when there's no data yet.
@@ -1065,15 +1170,14 @@ void	RequestHandler::sendResponse()
 		// If an error was already set before preparing response, send that error code
 		if (this->_error >= 300 && this->_error < 600)
 		{
-			//std::map<int, std::string>::iterator	it = this->_listener.getConfig().error_pages.find(this->_error);
-			/*std::ostringstream hs;
+			std::ostringstream hs;
 			hs << this->_headerContent.protocol << " " << this->_error << " " << reasonPhrase(this->_error) << "\r\n";
 			hs << "Connection: close\r\n";
 			hs << "Content-Length: 0\r\n\r\n";
 			_sendBuffer += hs.str();
 			_isSent = true;
 			flushResponse();
-			return;*/
+			return;
 		}
 
 		// Handle DELETE specially: do not load the file content before attempting to delete it
@@ -1104,6 +1208,7 @@ void	RequestHandler::sendResponse()
 
 		if (this->_headerContent.method == "POST")
 		{
+			std::cout << "sendResponse: POST path=" << this->_headerContent.path << " ContentLength=" << this->_headerContent.ContentLength << " body.size=" << this->_body.size() << "\n";
 			std::string serverRoot = _listener.getConfig().root;
 			if (!isWithinRoot(_headerContent.path, serverRoot))
 			{
@@ -1139,6 +1244,10 @@ void	RequestHandler::sendResponse()
     		    return;
     		}
 			int	fd = open(this->_headerContent.path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+			if (fd < 0)
+			{
+				std::cerr << "sendResponse: open failed for " << this->_headerContent.path << " errno=" << errno << " (" << strerror(errno) << ")\n";
+			}
 			if (fd < 0)
 			{
 				if (errno == EACCES || errno == EPERM) this->_error = 403;
