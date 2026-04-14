@@ -50,7 +50,7 @@ private:
 	std::string				_chunkLine;
 	std::string				_sendBuffer;
 	bool					_isSent;
-	LocationConfig			_location;
+	const LocationConfig	_location;
 	bool					_isLocation;
 public:
 	Client(Server& listener, int fd);
@@ -73,7 +73,7 @@ public:
 	std::string	joinPath(const std::string& a, const std::string& b);
 	bool		startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter);
 	void		handleErrors();
-	void		chargeStatusData(std::map<std::pair<int, int>, std::string>& errorPages);
+	void		chargeStatusData(const std::map<std::pair<int, int>, std::string>& errorPages);
     void		handleCgiFdEvent(int fd, short revents);
     void		finalizeCgiIfDone();
     int			getCgiInFd() const;

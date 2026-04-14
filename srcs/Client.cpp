@@ -801,7 +801,7 @@ void	Client::setPath()
 			if (it->path.size() <= _headerContent.path.size() && _headerContent.path.compare(0, it->path.size(), it->path) == 0)
 			{
 				_isLocation = true;
-				_location = *it;
+				_location = *it; //arreglar esto
 				std::cout << "it->path: " << it->path << std::endl;
 				if (checkMethod(_headerContent.method, it->allowed_methods) == false)
 				{
@@ -1189,7 +1189,7 @@ void	Client::handleDelete()
 	_status = 204;
 }
 
-void	Client::chargeStatusData(std::map<std::pair<int, int>, std::string>& errorPages)
+void	Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& errorPages)
 {
 	std::map<std::pair<int, int>, std::string>::const_iterator it = errorPages.begin();
 	std::map<std::pair<int, int>, std::string>::const_iterator end = errorPages.end();
@@ -1203,7 +1203,6 @@ void	Client::chargeStatusData(std::map<std::pair<int, int>, std::string>& errorP
 			_headerContent.path = it->second;
 		}
 	}
-	//cambiar para que funciona con referencias constantes
 }
 
 void	Client::handleErrors()
