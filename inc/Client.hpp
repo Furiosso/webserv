@@ -50,8 +50,12 @@ private:
 	std::string				_chunkLine;
 	std::string				_sendBuffer;
 	bool					_isSent;
-	const LocationConfig	_location;
+	LocationConfig			_location;
 	bool					_isLocation;
+	/* Fields for error page handling */
+	std::string		_errorResolvedPath; // resolved filesystem path for custom error page
+	std::string		_redirectLocation;  // external URL for redirects (http/https)
+	bool			_hasErrorPageResolved; // true if an error page (or redirect) was resolved
 public:
 	Client(Server& listener, int fd);
 	~Client();
@@ -73,7 +77,9 @@ public:
 	std::string	joinPath(const std::string& a, const std::string& b);
 	bool		startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter);
 	void		handleErrors();
+	void		chargeDefaultErrorPage();
 	void		chargeStatusData(const std::map<std::pair<int, int>, std::string>& errorPages);
+	void		chargeStatusData(std::map<std::pair<int, int>, std::string>& errorPages);
     void		handleCgiFdEvent(int fd, short revents);
     void		finalizeCgiIfDone();
     int			getCgiInFd() const;

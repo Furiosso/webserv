@@ -9,6 +9,7 @@ Client::Client(Server& listener, int fd) : _listener(listener), _fd(fd), _status
 	_headerContent.isChunked = false;
 	_headerContent.ContentLength = 0;
 	_headerContent.isAutoindexResponse = false;
+	_hasErrorPageResolved = false;
 	_cgi.pid = -1;
 	_cgi.in_fd = -1;
 	_cgi.out_fd = -1;
@@ -801,7 +802,7 @@ void	Client::setPath()
 			if (it->path.size() <= _headerContent.path.size() && _headerContent.path.compare(0, it->path.size(), it->path) == 0)
 			{
 				_isLocation = true;
-				_location = *it; //arreglar esto
+				_location = *it;
 				std::cout << "it->path: " << it->path << std::endl;
 				if (checkMethod(_headerContent.method, it->allowed_methods) == false)
 				{
@@ -1196,13 +1197,125 @@ void	Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& 
 
 	for (; it != end; ++it)
 	{
-		if (it->first.first == _status)
+		if (it->first.first != _status)
+			continue;
+		if (it->first.first != it->first.second)
+			_status = it->first.second;
+		_headerContent.path = it->second;
+		std::string target = it->second;
+		while (!target.empty() && (target[0] == ' ' || target[0] == '\t'))
+			target.erase(0, 1);
+		while (!target.empty() && (target[target.size() - 1] == ' ' || target[target.size() - 1] == '\t'))
+			target.erase(target.size() - 1);
+		// EXTERNAL URL
+		if (target.size() >= 7 && (target.substr(0, 7) == "http://" || (target.size() >= 8 && target.substr(0, 8) == "https://")))
 		{
-			if (it->first.first != it->first.second)
-				_status = it->first.second;
-			_headerContent.path = it->second;
+			_redirectLocation = target;
+			_hasErrorPageResolved = true;
+			return;
+		}
+		// Local URI or relative path -> resolve to filesystem path using location or server root
+		std::string root = _listener.getConfig().root;
+		if (_isLocation)
+			root = _location.root;
+		std::string resolved;
+		if (!target.empty() && target[0] == '/')
+		{
+			// target is a URI path relative to server/location root
+			// avoid duplicating slashes
+			if (root.size() > 0 && root[root.size() - 1] == '/')
+				resolved = root + (target.size() > 1 ? target.substr(1) : std::string());
+			else
+				resolved = root + target;
+		}
+		else
+		{
+			// treat as relative to root
+			if (root.size() > 0 && root[root.size() - 1] == '/')
+				resolved = root + target;
+			else
+				resolved = root + "/" + target;
+		}
+		// validate resolved path
+		if (!resolved.empty() && isWithinRoot(resolved, root) && access(resolved.c_str(), R_OK) == 0)
+		{
+			_errorResolvedPath = resolved;
+			_hasErrorPageResolved = true;
+			return;
 		}
 	}
+}
+
+void	Client::chargeStatusData(std::map<std::pair<int, int>, std::string>& errorPages)
+{
+	std::map<std::pair<int, int>, std::string>::const_iterator it = errorPages.begin();
+	std::map<std::pair<int, int>, std::string>::const_iterator end = errorPages.end();
+
+	for (; it != end; ++it)
+	{
+		if (it->first.first != _status)
+			continue;
+		if (it->first.first != it->first.second)
+			_status = it->first.second;
+		_headerContent.path = it->second;
+		std::string target = it->second;
+		while (!target.empty() && (target[0] == ' ' || target[0] == '\t'))
+			target.erase(0, 1);
+		while (!target.empty() && (target[target.size() - 1] == ' ' || target[target.size() - 1] == '\t'))
+			target.erase(target.size() - 1);
+		// EXTERNAL URL
+		if (target.size() >= 7 && (target.substr(0, 7) == "http://" || (target.size() >= 8 && target.substr(0, 8) == "https://")))
+		{
+			_redirectLocation = target;
+			_hasErrorPageResolved = true;
+			return;
+		}
+		// Local URI or relative path -> resolve to filesystem path using location or server root
+		std::string root = _listener.getConfig().root;
+		if (_isLocation)
+			root = _location.root;
+		std::string resolved;
+		if (!target.empty() && target[0] == '/')
+		{
+			// target is a URI path relative to server/location root
+			// avoid duplicating slashes
+			if (root.size() > 0 && root[root.size() - 1] == '/')
+				resolved = root + (target.size() > 1 ? target.substr(1) : std::string());
+			else
+				resolved = root + target;
+		}
+		else
+		{
+			// treat as relative to root
+			if (root.size() > 0 && root[root.size() - 1] == '/')
+				resolved = root + target;
+			else
+				resolved = root + "/" + target;
+		}
+		// validate resolved path
+		if (!resolved.empty() && isWithinRoot(resolved, root) && access(resolved.c_str(), R_OK) == 0)
+		{
+			_errorResolvedPath = resolved;
+			_hasErrorPageResolved = true;
+			return;
+		}
+	}
+}
+
+void	Client::chargeDefaultErrorPage()
+{
+	std::stringstream	ss;
+
+	ss << "<html><head><title>"
+		<< _status
+		<< " "
+		<< reasonPhrase(_status)
+		<< "</title></head><body><center><h1>"
+		<< _status
+		<< " "
+		<<  reasonPhrase(_status)
+		<< "</h1></center><hr><center>webserv></center></body></html>";
+	_sendBuffer = ss.str();
 }
 
 void	Client::handleErrors()
@@ -1217,6 +1330,8 @@ void	Client::handleErrors()
 		chargeStatusData(_listener.getConfig().error_pages);
 		return ;
 	}
+	if (this->_status >= 300 && this->_status < 600)
+		chargeDefaultErrorPage();
 	/*if (this->_status >= 300 && this->_status < 600)
 	{
 		std::ostringstream hs;
@@ -1236,6 +1351,23 @@ void	Client::sendResponse()
 	{
 		// If an error was already set before preparing response, send that error code
 		handleErrors();
+
+		// If chargeStatusData resolved an external redirect, send it immediately
+		if (_hasErrorPageResolved && !_redirectLocation.empty())
+		{
+			int redirectStatus = _status;
+			if (!(redirectStatus >= 300 && redirectStatus < 400))
+				redirectStatus = 302; // fallback to temporary redirect
+			std::ostringstream hs;
+			hs << this->_headerContent.protocol << " " << redirectStatus << " " << reasonPhrase(redirectStatus) << "\r\n";
+			hs << "Location: " << _redirectLocation << "\r\n";
+			hs << "Connection: close\r\n";
+			hs << "Content-Length: 0\r\n\r\n";
+			_sendBuffer += hs.str();
+			_isSent = true;
+			flushResponse();
+			return;
+		}
 		
 
 		// Handle DELETE specially: do not load the file content before attempting to delete it
@@ -1319,7 +1451,7 @@ void	Client::sendResponse()
         		to_write -= w;
 			}
 			close (fd);
-			int	status;
+			int status;
 			if (existed)
 				status = 200;
 			else
@@ -1360,11 +1492,16 @@ void	Client::sendResponse()
 		}
 		else
 		{
-			body = loadContent(this->_headerContent.path);
+			// If chargeStatusData resolved a custom error file, use it
+			if (_hasErrorPageResolved && !_errorResolvedPath.empty())
+				body = loadContent(_errorResolvedPath);
+			else
+				body = loadContent(this->_headerContent.path);
 		}
 
-		// Default response for successful GET/HEAD/POST is 200
-		_status = 200;
+		// Only set default 200 if status indicates success-range
+		if (!(_status >= 300 && _status < 600))
+			_status = 200;
 		std::ostringstream hs;
 		hs << this->_headerContent.protocol << " " << _status << " " << reasonPhrase(_status) << "\r\n";
 		hs << "Content-Length: " << body.size() << "\r\n";
