@@ -1304,9 +1304,11 @@ void	Client::chargeStatusData(std::map<std::pair<int, int>, std::string>& errorP
 
 void	Client::chargeDefaultErrorPage()
 {
-	std::stringstream	ss;
+	std::string			body;
+	std::stringstream	bs;
+	std::stringstream	hs;
 
-	ss << "<html><head><title>"
+	bs << "<html><head><title>"
 		<< _status
 		<< " "
 		<< reasonPhrase(_status)
@@ -1314,8 +1316,28 @@ void	Client::chargeDefaultErrorPage()
 		<< _status
 		<< " "
 		<<  reasonPhrase(_status)
-		<< "</h1></center><hr><center>webserv></center></body></html>";
-	_sendBuffer = ss.str();
+		<< "</h1></center><hr><center>webserv</center></body></html>";
+	body = bs.str();
+	hs << this->_headerContent.protocol << " " << _status << " " << reasonPhrase(_status) << "\r\n";
+	hs << "Content-Length: " << body.size() << "\r\n";
+	// === INSERT SWITCH BY HTTP METHOD HERE ===
+	// Single-line notes for implementation:
+	// 1) Add: switch (this->_headerContent.method) { case "GET": case "HEAD": case "POST": case "DELETE": }
+	// 2) For GET: if file -> body as loaded; if dir+autoindex -> body already generated above; set status 200.
+	// 3) For HEAD: same as GET but do not append body later (respect method when adding body to _sendBuffer).
+	// 4) For POST: if CGI -> initiate startCgiNonBlocking(...) here (only after body received) and set up _cgi.write_buf; set appropriate status (201/200) or delegate to CGI handling.
+	// 5) For DELETE: try unlink(joinPath(root, requested)); set _status = 204 on success or 404/403 on failure.
+	// 6) Ensure any filesystem ops check isWithinRoot(...) and access(..., R_OK/W_OK) before acting.
+	// 7) After switch, prepare `body` (or leave empty for HEAD/204) and set content-type accordingly.
+	// 8) Do NOT block for long operations; prefer non-blocking or spawn CGI as done elsewhere.
+	// If we produced an autoindex listing, declare it as HTML so browsers render it instead of downloading
+	hs << "Content-Type: text/html\r\n";
+	hs << "Connection: close\r\n";
+	hs << "\r\n";
+	
+	_sendBuffer += hs.str();
+	_sendBuffer += body;
+	std::cout << _sendBuffer << std::endl;
 }
 
 void	Client::handleErrors()
@@ -1330,8 +1352,8 @@ void	Client::handleErrors()
 		chargeStatusData(_listener.getConfig().error_pages);
 		return ;
 	}
-	if (this->_status >= 300 && this->_status < 600)
-		chargeDefaultErrorPage();
+	//if (this->_status >= 300 && this->_status < 600)
+	//	chargeDefaultErrorPage();
 	/*if (this->_status >= 300 && this->_status < 600)
 	{
 		std::ostringstream hs;
@@ -1501,28 +1523,35 @@ void	Client::sendResponse()
 
 		// Only set default 200 if status indicates success-range
 		if (!(_status >= 300 && _status < 600))
+		{
 			_status = 200;
-		std::ostringstream hs;
-		hs << this->_headerContent.protocol << " " << _status << " " << reasonPhrase(_status) << "\r\n";
-		hs << "Content-Length: " << body.size() << "\r\n";
-		// === INSERT SWITCH BY HTTP METHOD HERE ===
-		// Single-line notes for implementation:
-		// 1) Add: switch (this->_headerContent.method) { case "GET": case "HEAD": case "POST": case "DELETE": }
-		// 2) For GET: if file -> body as loaded; if dir+autoindex -> body already generated above; set status 200.
-		// 3) For HEAD: same as GET but do not append body later (respect method when adding body to _sendBuffer).
-		// 4) For POST: if CGI -> initiate startCgiNonBlocking(...) here (only after body received) and set up _cgi.write_buf; set appropriate status (201/200) or delegate to CGI handling.
-		// 5) For DELETE: try unlink(joinPath(root, requested)); set _status = 204 on success or 404/403 on failure.
-		// 6) Ensure any filesystem ops check isWithinRoot(...) and access(..., R_OK/W_OK) before acting.
-		// 7) After switch, prepare `body` (or leave empty for HEAD/204) and set content-type accordingly.
-		// 8) Do NOT block for long operations; prefer non-blocking or spawn CGI as done elsewhere.
-		// If we produced an autoindex listing, declare it as HTML so browsers render it instead of downloading
-		if (this->_headerContent.isAutoindexResponse)
-			hs << "Content-Type: text/html\r\n";
+			std::ostringstream hs;
+			hs << this->_headerContent.protocol << " " << _status << " " << reasonPhrase(_status) << "\r\n";
+			hs << "Content-Length: " << body.size() << "\r\n";
+			// === INSERT SWITCH BY HTTP METHOD HERE ===
+			// Single-line notes for implementation:
+			// 1) Add: switch (this->_headerContent.method) { case "GET": case "HEAD": case "POST": case "DELETE": }
+			// 2) For GET: if file -> body as loaded; if dir+autoindex -> body already generated above; set status 200.
+			// 3) For HEAD: same as GET but do not append body later (respect method when adding body to _sendBuffer).
+			// 4) For POST: if CGI -> initiate startCgiNonBlocking(...) here (only after body received) and set up _cgi.write_buf; set appropriate status (201/200) or delegate to CGI handling.
+			// 5) For DELETE: try unlink(joinPath(root, requested)); set _status = 204 on success or 404/403 on failure.
+			// 6) Ensure any filesystem ops check isWithinRoot(...) and access(..., R_OK/W_OK) before acting.
+			// 7) After switch, prepare `body` (or leave empty for HEAD/204) and set content-type accordingly.
+			// 8) Do NOT block for long operations; prefer non-blocking or spawn CGI as done elsewhere.
+			// If we produced an autoindex listing, declare it as HTML so browsers render it instead of downloading
+			if (this->_headerContent.isAutoindexResponse)
+				hs << "Content-Type: text/html\r\n";
+			else
+				hs << "Content-Type: " << getMimeType(this->_headerContent.path) << "\r\n";
+			hs << "Connection: close\r\n";
+			hs << "\r\n";
+			_sendBuffer += hs.str();
+		}
 		else
-			hs << "Content-Type: " << getMimeType(this->_headerContent.path) << "\r\n";
-		hs << "Connection: close\r\n";
-		hs << "\r\n";
-		_sendBuffer += hs.str();
+		{
+			std::cout << "llega aqui\n";
+			chargeDefaultErrorPage();
+		}
 		if (this->_headerContent.method != "HEAD")
 			_sendBuffer += body;
 	}

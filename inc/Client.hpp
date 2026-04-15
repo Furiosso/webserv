@@ -22,14 +22,14 @@ struct HeaderContent
 
 struct CgiState
 {
-    pid_t pid;
-    int in_fd;    // parent writes -> child stdin
-    int out_fd;   // parent reads  <- child stdout
-    std::string write_buf;
-    size_t write_pos;
-    std::string read_buf;
-    bool in_closed;
-    bool out_closed;
+    pid_t		pid;
+    int			in_fd;    // parent writes -> child stdin
+    int			out_fd;   // parent reads  <- child stdout
+    std::string	write_buf;
+    size_t		write_pos;
+    std::string	read_buf;
+    bool		in_closed;
+    bool		out_closed;
 };
 
 class Client
@@ -53,9 +53,9 @@ private:
 	LocationConfig			_location;
 	bool					_isLocation;
 	/* Fields for error page handling */
-	std::string		_errorResolvedPath; // resolved filesystem path for custom error page
-	std::string		_redirectLocation;  // external URL for redirects (http/https)
-	bool			_hasErrorPageResolved; // true if an error page (or redirect) was resolved
+	std::string				_errorResolvedPath; // resolved filesystem path for custom error page
+	std::string				_redirectLocation;  // external URL for redirects (http/https)
+	bool					_hasErrorPageResolved; // true if an error page (or redirect) was resolved
 public:
 	Client(Server& listener, int fd);
 	~Client();
