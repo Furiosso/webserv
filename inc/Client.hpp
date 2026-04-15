@@ -77,7 +77,7 @@ public:
 	std::string	joinPath(const std::string& a, const std::string& b);
 	bool		startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter);
 	void		handleErrors();
-	void		chargeDefaultErrorPage();
+	std::string	chargeDefaultErrorPage();
 	void		chargeStatusData(const std::map<std::pair<int, int>, std::string>& errorPages);
 	void		chargeStatusData(std::map<std::pair<int, int>, std::string>& errorPages);
     void		handleCgiFdEvent(int fd, short revents);
