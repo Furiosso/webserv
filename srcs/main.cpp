@@ -105,29 +105,46 @@ int main (int argc, char** argv, char** env)
         std::vector<struct pollfd> pollfds = sockman.getPollfds();
         std::vector<Client> clients;
         // Map CGI fds (in_fd/out_fd) to client index in `clients` vector
-        std::map<int, size_t> cgiFdToClientIdx;
+    // Map CGI fd -> client socket fd (int). We store client socket fd instead
+    // of vector index to avoid stale indexes when clients vector is mutated.
+    std::map<int, int> cgiFdToClientIdx;
 
-        // helper functions (C++98 compatible)
-        struct CgiHelpers {
-            static void registerCgiFd(std::vector<struct pollfd>& pollfds, std::map<int, size_t>& map, int fd, size_t clientIdx, short events) {
-                if (fd < 0) return;
-        struct pollfd p; p.fd = fd; p.events = events; p.revents = 0; pollfds.push_back(p);
-        map[fd] = clientIdx;
-        std::cerr << "registerCgiFd: registered fd=" << fd << " for clientIdx=" << clientIdx << " events=" << events << "\n";
-            }
-            static void unregisterCgiFds(std::vector<struct pollfd>& pollfds, std::map<int, size_t>& map, int infd, int outfd) {
-                if (infd >= 0) map.erase(infd);
-                if (outfd >= 0) map.erase(outfd);
-                for (size_t k = 0; k < pollfds.size(); ) {
-                    if (pollfds[k].fd == infd || pollfds[k].fd == outfd) {
-            std::cerr << "unregisterCgiFds: removing fd=" << pollfds[k].fd << "\n";
-            close(pollfds[k].fd);
-                        std::swap(pollfds[k], pollfds.back());
-                        pollfds.pop_back();
-                    } else ++k;
+    // helper functions (C++98 compatible)
+            struct CgiHelpers {
+                static void registerCgiFd(std::vector<struct pollfd>& pollfds, std::map<int, int>& map, int fd, int clientSock, short events) {
+                    if (fd < 0) return;
+                    struct pollfd p; p.fd = fd; p.events = events; p.revents = 0; pollfds.push_back(p);
+                    map[fd] = clientSock;
+                    std::cerr << "registerCgiFd: registered fd=" << fd << " for clientSock=" << clientSock << " events=" << events << "\n";
                 }
-            }
-        };
+                static void unregisterCgiFds(std::vector<struct pollfd>& pollfds, std::map<int, int>& map, int infd, int outfd) {
+                    if (infd >= 0) map.erase(infd);
+                    if (outfd >= 0) map.erase(outfd);
+                    for (size_t k = 0; k < pollfds.size(); ) {
+                        if (pollfds[k].fd == infd || pollfds[k].fd == outfd) {
+                            std::cerr << "unregisterCgiFds: removing fd=" << pollfds[k].fd << "\n";
+                            close(pollfds[k].fd);
+                            std::swap(pollfds[k], pollfds.back());
+                            pollfds.pop_back();
+                        } else ++k;
+                    }
+                }
+                // Update map entries when swapping/removing clients:
+                // cgiFdToClientIdx maps CGI fd -> client socket fd (int), so removal/reassignment operate on client socket fds.
+                static void removeClientMappings(std::map<int, int>& map, int clientSock) {
+                    for (std::map<int,int>::iterator it = map.begin(); it != map.end(); ) {
+                        if (it->second == clientSock) {
+                            std::map<int,int>::iterator toErase = it;
+                            ++it;
+                            map.erase(toErase);
+                        } else ++it;
+                    }
+                }
+                // No-op for reassign when mapping by client socket fd; kept for API compatibility.
+                static void reassignMappingsOnSwap(std::map<int, int>& /*map*/, size_t /*idxRemoved*/, size_t /*idxMovedTo*/) {
+                    // Intentionally empty: cgiFdToClientIdx uses client socket fds, so vector-index-based reassignment is not required.
+                }
+            };
         while (1)
         {
             nfds_t  nfds = static_cast<nfds_t>(pollfds.size());
@@ -142,10 +159,10 @@ int main (int argc, char** argv, char** env)
                 int inFd = clients[ci].getCgiInFd();
                 int outFd = clients[ci].getCgiOutFd();
                 if (inFd >= 0 && cgiFdToClientIdx.count(inFd) == 0) {
-                    CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, inFd, ci, POLLOUT);
+                    CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, inFd, clients[ci].getClientFd(), POLLOUT);
                 }
                 if (outFd >= 0 && cgiFdToClientIdx.count(outFd) == 0) {
-                    CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, outFd, ci, POLLIN);
+                    CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, outFd, clients[ci].getClientFd(), POLLIN);
                 }
             }
 
@@ -228,6 +245,15 @@ int main (int argc, char** argv, char** env)
                                         && (clients.back().getMethod() != "POST" || clients.back().getIsBodyReady() == true))
                                     {
                                         clients.back().sendResponse();
+                                        // If sendResponse started a CGI, register its fds immediately
+                                        if (clients.back().isCgiRunning()) {
+                                            int inFd = clients.back().getCgiInFd();
+                                            int outFd = clients.back().getCgiOutFd();
+                                            if (inFd >= 0 && cgiFdToClientIdx.count(inFd) == 0)
+                                                CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, inFd, clients.back().getClientFd(), POLLOUT);
+                                            if (outFd >= 0 && cgiFdToClientIdx.count(outFd) == 0)
+                                                CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, outFd, clients.back().getClientFd(), POLLIN);
+                                        }
                                         if (clients.back().getIsSent() == true)
                                         {
                                             close(pollfds[pollfds.size() - 1].fd);
@@ -273,9 +299,9 @@ int main (int argc, char** argv, char** env)
                                         int inFd = clients[j].getCgiInFd();
                                         int outFd = clients[j].getCgiOutFd();
                                         if (inFd >= 0 && cgiFdToClientIdx.count(inFd) == 0)
-                                            CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, inFd, j, POLLOUT);
-                                        if (outFd >= 0 && cgiFdToClientIdx.count(outFd) == 0)
-                                            CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, outFd, j, POLLIN);
+                                                CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, inFd, clients[j].getClientFd(), POLLOUT);
+                                            if (outFd >= 0 && cgiFdToClientIdx.count(outFd) == 0)
+                                                CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, outFd, clients[j].getClientFd(), POLLIN);
                                     }
                                     // If chargeHeader completed and body is ready (e.g., GET), switch to POLLOUT so we can send response
                                     if (clients[j].getIsBodyReady() == true)
@@ -290,13 +316,14 @@ int main (int argc, char** argv, char** env)
                                 {
                                     clients[j].chargeBody();
                                     // If chargeBody started a CGI, register fds immediately
+									std::cerr << "main cgi if chargebody\n";
                                     if (clients[j].isCgiRunning()) {
                                         int inFd = clients[j].getCgiInFd();
                                         int outFd = clients[j].getCgiOutFd();
                                         if (inFd >= 0 && cgiFdToClientIdx.count(inFd) == 0)
-                                            CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, inFd, j, POLLOUT);
+                                            CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, inFd, clients[j].getClientFd(), POLLOUT);
                                         if (outFd >= 0 && cgiFdToClientIdx.count(outFd) == 0)
-                                            CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, outFd, j, POLLIN);
+                                            CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, outFd, clients[j].getClientFd(), POLLIN);
                                     }
                                     if (clients[j].getIsBodyReady() == true)
                                     {
@@ -312,22 +339,31 @@ int main (int argc, char** argv, char** env)
 
                         // If not a client socket, check if it's a CGI fd and dispatch
                         if (cgiFdToClientIdx.count(fd)) {
-                            size_t clientIdx = cgiFdToClientIdx[fd];
-                            int revents = pollfds[i].revents;
-                            clients[clientIdx].handleCgiFdEvent(fd, revents);
-                            // If CGI finished, unregister its fds and trigger sending response
-                            if (!clients[clientIdx].isCgiRunning()) {
-                                int infd = clients[clientIdx].getCgiInFd();
-                                int outfd = clients[clientIdx].getCgiOutFd();
-                                CgiHelpers::unregisterCgiFds(pollfds, cgiFdToClientIdx, infd, outfd);
-                               // Try to send the response now that CGI is done.
-                                clients[clientIdx].sendResponse();
-                                // Find the pollfd for the client socket and set it to POLLOUT so sendResponse is called by the loop
-                                int clientFd = clients[clientIdx].getClientFd();
-                                for (size_t k = 0; k < pollfds.size(); ++k) {
-                                    if (pollfds[k].fd == clientFd) {
-                                        pollfds[k].events = POLLOUT;
-                                        break;
+                            int clientSock = cgiFdToClientIdx[fd];
+                            size_t clientIdx = static_cast<size_t>(-1);
+                            for (size_t ci = 0; ci < clients.size(); ++ci) {
+                                if (clients[ci].getClientFd() == clientSock) { clientIdx = ci; break; }
+                            }
+                            if (clientIdx == static_cast<size_t>(-1)) {
+                                // client not found (might have been closed) -> unregister fds
+                                CgiHelpers::unregisterCgiFds(pollfds, cgiFdToClientIdx, fd, -1);
+                            } else {
+                                int revents = pollfds[i].revents;
+                                clients[clientIdx].handleCgiFdEvent(fd, revents);
+                                // If CGI finished, unregister its fds and trigger sending response
+                                if (!clients[clientIdx].isCgiRunning()) {
+                                    int infd = clients[clientIdx].getCgiInFd();
+                                    int outfd = clients[clientIdx].getCgiOutFd();
+                                    CgiHelpers::unregisterCgiFds(pollfds, cgiFdToClientIdx, infd, outfd);
+                                   // Try to send the response now that CGI is done.
+                                    clients[clientIdx].sendResponse();
+                                    // Find the pollfd for the client socket and set it to POLLOUT so sendResponse is called by the loop
+                                    int clientFd = clients[clientIdx].getClientFd();
+                                    for (size_t k = 0; k < pollfds.size(); ++k) {
+                                        if (pollfds[k].fd == clientFd) {
+                                            pollfds[k].events = POLLOUT;
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -345,6 +381,15 @@ int main (int argc, char** argv, char** env)
                             // - isFinished(): true si respuesta enviada y cerrar según keep-alive*/
                             std::cout << "hace el pollout\n";
                             clients[j].sendResponse();
+                            // If sendResponse started a CGI, register its fds immediately
+                            if (clients[j].isCgiRunning()) {
+                                int inFd = clients[j].getCgiInFd();
+                                int outFd = clients[j].getCgiOutFd();
+                                if (inFd >= 0 && cgiFdToClientIdx.count(inFd) == 0)
+                                    CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, inFd, clients[j].getClientFd(), POLLOUT);
+                                if (outFd >= 0 && cgiFdToClientIdx.count(outFd) == 0)
+                                    CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, outFd, clients[j].getClientFd(), POLLIN);
+                            }
                             if (clients[j].getIsSent() == true)
                             {
                                 close(pollfds[i].fd);

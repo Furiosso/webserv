@@ -31,6 +31,7 @@ struct CgiState
     std::string	read_buf;
     bool		in_closed;
     bool		out_closed;
+	bool		finalized;
 };
 
 class Client

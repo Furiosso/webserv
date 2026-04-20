@@ -1,6 +1,8 @@
 #include "Client.hpp"
 #include <dirent.h>
 #include <iomanip>
+#include <limits.h>
+#include <stdlib.h>
 #include <new>
 #include <cstring>
 #include <strings.h>
@@ -18,6 +20,7 @@ Client::Client(Server& listener, int fd) : _listener(listener), _fd(fd), _status
 	_cgi.write_pos = 0;
 	_cgi.in_closed = false;
 	_cgi.out_closed = false;
+	_cgi.finalized = false;
 
 	// do not duplicate env; caller may set it via setEnv
 	env = NULL;
@@ -186,6 +189,20 @@ static std::string urlDecode(const std::string& s)
 	return out;
 }
 
+// Return directory part of a filesystem path, or empty if none.
+static std::string getDirectory(const std::string& path)
+{
+	if (path.empty()) return std::string();
+	// Remove leading "./" segments which indicate current directory
+	std::string p = path;
+	while (p.size() >= 2 && p[0] == '.' && p[1] == '/')
+		p = p.substr(2);
+	size_t pos = p.find_last_of('/');
+	if (pos == std::string::npos) return std::string();
+	if (pos == 0) return std::string("/");
+	return p.substr(0, pos);
+}
+
 void Client::	chargeHeader()
 {
 	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
@@ -247,16 +264,16 @@ void Client::	chargeHeader()
 			this->parseHeader();
 			// If client included 'Expect: 100-continue' we must acknowledge it
 			// so browsers will proceed to send the request body.
+			
+			std::string lower = full;
+			lower = strToLower(lower);
+			if (lower.find("expect: 100-continue") != std::string::npos)
 			{
-				std::string lower = full;
-				lower = strToLower(lower);
-				if (lower.find("expect: 100-continue") != std::string::npos)
-				{
-					const char *cont = "HTTP/1.1 100 Continue\r\n\r\n";
-					ssize_t s = send(this->_fd, cont, std::strlen(cont), 0);
-					(void)s;
-				}
+				const char *cont = "HTTP/1.1 100 Continue\r\n\r\n";
+				ssize_t s = send(this->_fd, cont, std::strlen(cont), 0);
+				(void)s;
 			}
+			
 			std::cout << "after parseHeader: ContentLength=" << this->_headerContent.ContentLength << " isChunked=" << this->_headerContent.isChunked << " method=" << this->_headerContent.method << "\n";
 			std::cout << this->_header << std::endl;
             std::cout << "CHARGE HEADER2\n";
@@ -265,20 +282,6 @@ void Client::	chargeHeader()
 			} catch (const std::exception& e) {
 				std::cerr << "Exception in setPath(): " << e.what() << std::endl;
 				this->_status = 500;
-			}
-			// If this is a GET/HEAD request, check and start CGI (if configured) after path resolution.
-			// If a CGI was started, return early: response will be produced when CGI finishes.
-			if (this->_status == 200 && (this->_headerContent.method == "GET" || this->_headerContent.method == "HEAD"))
-			{
-				if (handleCgiIfNeeded())
-				{
-					// mark header ready so higher layer can register fd events for CGI fds,
-					// but do not mark body ready: body will be provided by CGI when finished.
-					this->_request[0] = this->_header.substr(0, this->_header.find("\r\n"));
-					_isHeaderReady = true;
-					_isBodyReady = false;
-					return;
-				}
 			}
             std::cout << "CHARGE HEADER3\n";
 			std::cout << "error: " << this->_status << std::endl;
@@ -411,6 +414,8 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		return false;
 	}
 	pid_t pid = fork();
+	/*while (*env)
+		std::cout <<"pid: " << pid<< "ENV:::::::::::::::::" <<*(env)++ << std::endl;*/
 	if (pid < 0)
 	{
 		close(inpipe[0]);
@@ -429,14 +434,22 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		close(inpipe[1]);
 		close(outpipe[0]);
 		close(outpipe[1]);
-		char *argv[3];
-		argv[0] = const_cast<char*>(interpreter.c_str());
-		argv[1] = const_cast<char*>(scriptPath.c_str());
-		argv[2] = NULL;
-		/* Change working directory to the script directory so relative imports/paths work. 
+		std::string dir = getDirectory(scriptPath);
+		bool changedCwd = false;
+		if (!dir.empty())
 		{
-			std::string dir = getDirectory(scriptPath);
-			if (!dir.empty())
+			// try to resolve to an absolute path first
+			char resolved[PATH_MAX];
+			if (realpath(dir.c_str(), resolved) != NULL)
+			{
+				if (chdir(resolved) != 0)
+				{
+					int se = errno;
+					std::cerr << "child: chdir to '" << resolved << "' failed: " << strerror(se) << "\n";
+					_exit(127);
+				}
+			}
+			else
 			{
 				if (chdir(dir.c_str()) != 0)
 				{
@@ -445,9 +458,10 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 					_exit(127);
 				}
 			}
+			changedCwd = true;
 		}
 
-		 Build argv dynamically. If interpreter looks like Python, request unbuffered mode. 
+		/* Build argv dynamically. If interpreter looks like Python, request unbuffered mode. 
 		std::vector<char*> argv_vec;
 		bool python_unbuffered = false;
 		if (!interpreter.empty())
@@ -470,7 +484,7 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		char **argv_exec = new char*[argv_vec.size()];
 		for (size_t ai = 0; ai < argv_vec.size(); ++ai) argv_exec[ai] = argv_vec[ai];
 
-		 Build richer CGI env from available request data and inherit parent's env
+		 //Build richer CGI env from available request data and inherit parent's env
 		std::map<std::string,std::string> extras;
 		extras["REQUEST_METHOD"] = _headerContent.method;
 		extras["SERVER_PROTOCOL"] = _headerContent.protocol;
@@ -535,10 +549,43 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		std::cerr << "child: execve failed: errno=" << savedErrno << " (" << strerror(savedErrno) << ")\n";
 		freeEnvp(child_envp);
 		delete [] argv_exec;*/
-		// Debug: print argv so we can inspect what is being execve'd
-		std::cerr << "Argv[0]: " << argv[0] << " Argv[1]: "<< argv[1] << std::endl;
+		// Build argv safely into owned strings so c_str() pointers remain valid
+		std::vector<std::string> argv_store;
+		if (!interpreter.empty())
+		{
+			argv_store.push_back(interpreter);
+			std::string li = interpreter;
+			if (li.find("python") != std::string::npos)
+			{
+				argv_store.push_back(std::string("-u"));
+			}
+			std::string childScript = scriptPath;
+			while (childScript.size() >= 2 && childScript[0] == '.' && childScript[1] == '/')
+				childScript = childScript.substr(2);
+			if (changedCwd)
+			{
+				size_t bp = childScript.find_last_of('/');
+				if (bp != std::string::npos)
+					childScript = childScript.substr(bp + 1);
+			}
+			argv_store.push_back(childScript);
+		}
+		else
+		{
+			argv_store.push_back(scriptPath);
+		}
+		size_t argc = argv_store.size();
+		char **argv_exec = new char*[argc + 1];
+		for (size_t ai = 0; ai < argc; ++ai)
+			argv_exec[ai] = const_cast<char*>(argv_store[ai].c_str());
+		argv_exec[argc] = NULL;
+		// Debug: print full argv list
+		std::cerr << "child argv:";
+		for (size_t ai = 0; ai < argc + 1; ++ai)
+			std::cerr << " '" << (argv_exec[ai] ? argv_exec[ai] : (char*)"(null)") << "'";
+		std::cerr << std::endl;
 		// Attempt to execute interpreter; on failure, print errno reason to stderr
-		execve(argv[0], argv, env);
+		execve(argv_exec[0], argv_exec, env);
 		int savedErrno = errno;
 		std::cerr << "execve failed: errno=" << savedErrno << " (" << strerror(savedErrno) << ")\n";
 		/*std::cerr << "child: execve failed: errno=" << savedErrno << " (" << strerror(savedErrno) << ")\n";
@@ -555,12 +602,14 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		_cgi.in_fd = inpipe[1];
 		_cgi.out_fd = outpipe[0];
 		_cgi.write_buf = this->_body;
+		std::cout << "BODY EN CGI" <<_body << std::endl;
 		_cgi.write_pos = 0;
 		_cgi.read_buf.clear();
 		// Clear any previous CGI content-type
 		_cgiContentType.clear();
 		_cgi.in_closed = false;
 		_cgi.out_closed = false;
+		_cgi.finalized = false;
 		setNonBlocking(_cgi.in_fd);
 		setNonBlocking(_cgi.out_fd);
 		// If there's no data to send to CGI stdin (common for GET/HEAD), close
@@ -621,10 +670,10 @@ void Client::handleCgiFdEvent(int fd, short revents)
         finalizeCgiIfDone();
         return;
     }
-	// escribit a stdin del CGI cuando POLLOUT
+	// escribir a stdin del CGI cuando POLLOUT
 	if (fd == _cgi.in_fd && (revents & POLLOUT))
 	{
-		while (_cgi.write_pos < _cgi.write_buf.size()) //si peta o algo cambiarlo por un if
+		while (_cgi.write_pos < _cgi.write_buf.size())
 		{
 			const char* buf = _cgi.write_buf.c_str() + _cgi.write_pos;
 			size_t to_write = _cgi.write_buf.size() - _cgi.write_pos;
@@ -676,16 +725,69 @@ void Client::handleCgiFdEvent(int fd, short revents)
 void Client::finalizeCgiIfDone()
 {
 	if (!isCgiRunning())
+	{
+		// If already finalized previously (cgi finished and parsed), nothing to do
+		if (_cgi.finalized)
+			return;
+		std::cerr << "cacota gorda\n";
 		return ;
-	if (!_cgi.out_closed)
-		return ;
+	}
 	int	status = 0;
 	std::cerr << "finalizeCgiIfDone: checking pid=" << _cgi.pid << " out_closed=" << _cgi.out_closed << " read_buf_size=" << _cgi.read_buf.size() << "\n";
+	// Check whether the CGI child has exited. If it has, try to drain any remaining
+	// data from the child's stdout fd before parsing. This allows finalization even
+	// when the POLLHUP/EOF handling hasn't yet marked out_closed.
 	pid_t w = waitpid(_cgi.pid, &status, WNOHANG);
 	std::cerr << "finalizeCgiIfDone: waitpid returned w=" << w << " errno=" << errno << "\n";
 	if (w == 0)
-		return ;
+	{
+		// If the child hasn't yet been reaped but we've already received a
+		// complete CGI response in _cgi.read_buf (headers + body separator),
+		// it's safe to block briefly and reap the child so we can finalize
+		// the response immediately instead of waiting for another poll event.
+		bool haveSep = (_cgi.read_buf.find("\r\n\r\n") != std::string::npos) || (_cgi.read_buf.find("\n\n") != std::string::npos);
+		if (!haveSep)
+			return ;
+		std::cerr << "finalizeCgiIfDone: response looks complete, waiting for child to exit...\n";
+		// Block until child exits to avoid leaving a zombie; this should be
+		// fast for well-behaved CGI scripts that wrote a complete response.
+		w = waitpid(_cgi.pid, &status, 0);
+		std::cerr << "finalizeCgiIfDone: blocking waitpid returned w=" << w << " errno=" << errno << "\n";
+	}
+	// Child exited or changed state; mark pid as cleared and attempt to read any
+	// remaining data from the out_fd so we have a complete response body.
 	_cgi.pid = -1;
+	if (_cgi.out_fd >= 0)
+	{
+		// Drain remaining data (non-blocking fd) until EOF or error
+		char tmpbuf[4096];
+		while (true)
+		{
+			ssize_t r = read(_cgi.out_fd, tmpbuf, sizeof(tmpbuf));
+			if (r > 0)
+				_cgi.read_buf.append(tmpbuf, r);
+			else if (r == 0)
+			{
+				close(_cgi.out_fd);
+				_cgi.out_fd = -1;
+				_cgi.out_closed = true;
+				break;
+			}
+			else
+			{
+				if (errno == EAGAIN || errno == EWOULDBLOCK)
+				{
+					// No more data available right now; leave fd open and proceed
+					break;
+				}
+				// On other errors, close the fd and mark closed
+				close(_cgi.out_fd);
+				_cgi.out_fd = -1;
+				_cgi.out_closed = true;
+				break;
+			}
+		}
+	}
 	std::string &out = _cgi.read_buf;
 	// Accept both CRLFCRLF and LFLF as header/body separators from CGI output
 	size_t sep = out.find("\r\n\r\n");
@@ -760,6 +862,7 @@ void Client::finalizeCgiIfDone()
 	this->_body = cgiBody;
 	this->_status = cgiStatus;
 	this->_isBodyReady = true;
+	_cgi.finalized = true;
 
 	std::cerr << "finalizeCgiIfDone: client fd=" << this->_fd << " status=" << this->_status << " body_size=" << this->_body.size() << "\n";
 
@@ -877,8 +980,8 @@ void Client::parseHeader()
 		return ;
 	}
 	this->_headerContent.path = urlDecode(token);
-	std::string ext = getExtension(_headerContent.path);
-	std::map<std::string,std::string> cgiMap;
+	//std::string ext = getExtension(_headerContent.path);
+	/*std::map<std::string,std::string> cgiMap;
 	//cgiMap = 
 	if (cgiMap.count(ext))
     {
@@ -894,7 +997,7 @@ void Client::parseHeader()
         // response will be produced when CGI finishes (finalizeCgiIfDone)
 		//_isSent = true;
         return;
-    }
+    }*/
 	std::cout << "path: " << token << std::endl;
 	token = "";
 	while (*begin == ' ')
