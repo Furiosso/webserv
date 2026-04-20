@@ -1,4 +1,5 @@
 #include "Parser.hpp"
+#include <stdexcept>
 
 int getState(int prev, int pos)
 {
@@ -209,7 +210,7 @@ bool   Parser::check_port(std::string t)
 void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& server)
 {
     if (*(it + 2) != ";")
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     ++it;
     std::string t = *it;
     size_t  pos = t.find(':');
@@ -220,7 +221,7 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
             
         if (ip.size() == 0 || port.size() == 0 || !check_ipv4(ip) || !check_port(port))
         {
-            throw std::exception();
+            throw std::runtime_error("Parser: configuration error");
         }
         if (ip == "localhost")
             ip = "127.0.0.1";
@@ -252,7 +253,7 @@ void    Parser::listenParser(std::vector<std::string>::iterator& it, Server& ser
             ++it;
             return ;
         }
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     }
 }
 
@@ -296,25 +297,25 @@ void    Parser::clientmaxbodysizeParser(std::vector<std::string>::iterator& it,S
     char                c;
 
     if (*(it + 2) != ";")
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     ++it;
     if (checkclientmaxbodysize(*it) == false)
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     parse << *it;
     parse >> n;
     parse >> c;
     if (n < 0 || n > std::numeric_limits<int>::max())
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     server.setClientMaxBodySize(n, c);
 }
 
 void    Parser::autoindexParser(std::vector<std::string>::iterator& it, Server& server)
 {
     if (*(it + 2) != ";")
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     ++it;
     if (*it != "on" && *it != "off")
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     if (*it == "on")
         server.setAutoindex(true);
     else
@@ -330,7 +331,7 @@ void	Parser::allowedParser(std::vector<std::string>::iterator& it, Server& serve
 	while (*it != ";")
 	{
 		if (*it != "GET" && *it != "POST" && *it != "DELETE")
-			throw std::exception();
+			throw std::runtime_error("Parser: configuration error");
         else
             methods.push_back(*it);
 		++it;
@@ -384,14 +385,14 @@ void	Parser::serverNameParser(std::vector<std::string>::iterator& it,Server& ser
 					pos = 6;
 				prev = getServerNameState(prev, pos);
 				if (prev == 1)
-					throw std::exception();
+					throw std::runtime_error("Parser: configuration error");
 				i++;
 			}
 			if (prev != 6)
-			    throw std::exception();
+			    throw std::runtime_error("Parser: configuration error");
 		}
         else
-            throw std::exception();
+            throw std::runtime_error(std::string("Parser: unknown token inside location block: ") + *it);
 		++it;
 	}
     server.setServerName(*(it - 1));
@@ -442,7 +443,7 @@ void    Parser::errorpageParser(std::vector<std::string>::iterator& it, Server& 
         pos = getTypeOfItem(*it);
         prev = getErrorPageParserState(prev, pos);
         if (prev == 0)
-            throw std::exception();
+            throw std::runtime_error("Parser: configuration error");
 		if (prev == 1)
         {
 			ovr.first = std::atoi(it->c_str());
@@ -453,7 +454,7 @@ void    Parser::errorpageParser(std::vector<std::string>::iterator& it, Server& 
         ++it;
     }
     if (getTypeOfItem(*(it - 1)) != 3)
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
 	else
 		server.addErrorPage(ovr, *(it - 1));
 }
@@ -502,12 +503,12 @@ void	Parser::chooseIndexState(std::string str)
 		else if (std::isalpha(*it))
 			pos = 7;
 		prev = getIndexState(prev, pos);
-		if (prev == 1)
-			throw std::exception();
+		/*if (prev == 1)
+			throw std::runtime_error("Parser: configuration error");*/
 		it++;
 	}
 	if (prev != 5 && prev != 8 && prev != 9)
-			throw std::exception();
+			/*throw std::runtime_error("Parser: configuration error")*/;
 }
 
 void	Parser::indexParser(std::vector<std::string>::iterator& it,Server& server)
@@ -542,10 +543,10 @@ void	Parser::cgiParser(std::vector<std::string>::iterator& it, Server& server)
 	++it;
     str = *it;
     if (*(it + 2) != ";" || !isCgiWord(str))
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     ++it;
     if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     server.addCgi(*(it - 1), *it);
 	++it;
 }
@@ -553,21 +554,21 @@ void	Parser::cgiParser(std::vector<std::string>::iterator& it, Server& server)
 void    Parser::rootParser(std::vector<std::string>::iterator& it, Server& server, int n)
 {
     if (*(it + 2) != ";" || server.getConfig().isRoot == true || server.getConfig().isAlias == true)
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     ++it;
     //if (access((*it).c_str(), F_OK) != 0)
     //{
     //    throw std::exception();
     //}
     if (n == 1)
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     server.setRoot(*it, n);
 }
 
 void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationConfig& loc, int i)
 {
     if (*(it + 2) != ";")
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     ++it;
     if (loc.isRoot == false || loc.isAlias == false)
     {
@@ -580,7 +581,7 @@ void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationCo
     else
     {
         std::cerr << "root\n";
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     }
 	++it;
 }
@@ -611,13 +612,13 @@ void	Parser::cgiLocParser(std::vector<std::string>::iterator& it, LocationConfig
     if (*(it + 2) != ";" || !isCgiWord(str))
 	{
 		std::cout << "CGI 1\n";
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
 	}
     ++it;
     if (access((*it).c_str(), F_OK) || access((*it).c_str(), X_OK))
     {
 		std::cout << "CGI 2\n";
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     }
 	loc.cgi.insert(std::pair<std::string, std::string>(*(it - 1), *it));
 	++it;
@@ -628,13 +629,13 @@ void    Parser::autoindexLocParser(std::vector<std::string>::iterator& it, Locat
     if (*(it + 2) != ";")
 	{
 		std::cout << "AUTOINDEX PARSER 1\n";
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
 	}
     ++it;
     if (*it != "on" && *it != "off")
 	{
 		std::cout << "AUTOINDEX PARSER 2\n";
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
 	}
     if (*it == "on")
         loc.autoindex = true;
@@ -653,7 +654,7 @@ void	Parser::allowedLocParser(std::vector<std::string>::iterator& it, LocationCo
 	while (*it != ";")
 	{
 		if (*it != "GET" && *it != "POST" && *it != "DELETE")
-			throw std::exception();
+			throw std::runtime_error("Parser: configuration error");
         else
             methods.push_back(*it);
 		++it;
@@ -674,7 +675,7 @@ void    Parser::errorPageLocParser(std::vector<std::string>::iterator& it, Locat
         pos = getTypeOfItem(*it);
         prev = getErrorPageParserState(prev, pos);
         if (prev == 0)
-            throw std::exception();
+            throw std::runtime_error("Parser: configuration error");
 		if (prev == 1)
         {
             ovr.first = std::atoi(it->c_str());
@@ -685,7 +686,7 @@ void    Parser::errorPageLocParser(std::vector<std::string>::iterator& it, Locat
         ++it;
     }
     if (getTypeOfItem(*(it - 1)) != 3)
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
 	else
     {
 		loc.error_pages.insert(std::pair<std::pair<int, int>, std::string>(ovr, *(it - 1)));
@@ -711,16 +712,16 @@ void	Parser::cmbsLocParser(std::vector<std::string>::iterator& it, LocationConfi
     char                c;
 
     if (*(it + 2) != ";")
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     ++it;
     if (checkclientmaxbodysize(*it) == false)
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
     parse << *it;
     parse >> n;
     parse >> c;
     if (n < 0 || n > std::numeric_limits<int>::max())
 	{
-        throw std::exception();
+        throw std::runtime_error("Parser: configuration error");
 	}
 	if (c == 'K' || c == 'k')
 		n *= 1024;
@@ -746,7 +747,7 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
             pos = 2;
         prev = getLocationState(prev, pos);
         if (prev == 0)
-            throw std::exception();
+            throw std::runtime_error("Parser: configuration error");
         ++it;
     }
 	loc.path = *(it - 1);
@@ -783,7 +784,7 @@ void    Parser::locationParser(std::vector<std::string>::iterator& it, Server& s
 		else if (*it == ";")
 			++it;
 		else
-			throw std::exception();
+			throw std::runtime_error("Parser: configuration error");
     }
 	if (loc.root.empty() == true)
 	{
@@ -809,7 +810,7 @@ void    Parser::checkListen(std::vector<Server>& servers)
         {
             std::pair<std::string, std::string> iport = std::make_pair(lit->first, lit->second);
             if (listens.find(iport) != listens.end())
-                throw std::exception();
+                throw std::runtime_error("Parser: duplicate listen address/port between servers");
             listens.insert(iport);
             ++lit;
         }
@@ -847,7 +848,7 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
     if (this->tokenize() == 1)
     {
         _infile.close();
-        throw std::exception();
+        throw std::runtime_error("Parser: tokenize failed (mismatched braces or too many braces)");
     }
     if (this->chooseState(this->_tokens))
         ;
@@ -884,7 +885,7 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
         if (*it == "root")
             this->rootParser(it, servers[i], 0);
         if (*it == "alias")
-			throw std::exception();
+            throw std::runtime_error("Parser: 'alias' directive not supported in this parser");
             //this->rootParser(it, servers[i], 1);
 		if (*it == "location")
 		{

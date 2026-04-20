@@ -1,5 +1,5 @@
-#ifndef REQUEST_HANDLER_HPP
-# define REQUEST_HANDLER_HPP
+#ifndef CLIENT_HPP
+# define CLIENT_HPP
 
 # include "ServerSocket.hpp"
 # include <algorithm>
@@ -14,6 +14,7 @@ struct HeaderContent
 	size_t		ContentLength;
 	bool		isChunked;
 	std::string path;
+	std::string requestUri; // raw request URI (path + optional ?query)
 	std::string	protocol;
 	std::string	root;
 	std::string	host;
@@ -49,6 +50,7 @@ private:
 	size_t					_chunkLen;
 	std::string				_chunkLine;
 	std::string				_sendBuffer;
+	std::string				_cgiContentType;
 	bool					_isSent;
 	LocationConfig			_location;
 	bool					_isLocation;
@@ -57,6 +59,8 @@ private:
 	std::string				_redirectLocation;  // external URL for redirects (http/https)
 	bool					_hasErrorPageResolved; // true if an error page (or redirect) was resolved
 public:
+	char	**env;
+	void	setEnv(char **envp);
 	Client(Server& listener, int fd);
 	~Client();
 	void		chargeHeader();
@@ -73,7 +77,7 @@ public:
 	void		setPath();
 	bool		checkMethod(std::string& method, const std::vector<std::string>& vec);
 	void		checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex, const std::string& root);
-	void		handleCgiIfNeeded();
+	bool		handleCgiIfNeeded();
 	std::string	joinPath(const std::string& a, const std::string& b);
 	bool		startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter);
 	void		handleErrors();

@@ -6,6 +6,7 @@
 #include "Parser.hpp"
 #include "Server.hpp"
 #include "Client.hpp"
+#include <typeinfo>
 
 
 //AUXILIAR PARA PRINTEO DE SERVER
@@ -28,7 +29,7 @@ int main (int argc, char** argv, char** env)
         return 1;
     }
     try
-    {  
+    {
         std::vector<Server>         servers;
         Parser parser(argv[1], servers);
         for (std::vector<Server>::size_type i = 0; i < servers.size(); ++i)
@@ -110,15 +111,17 @@ int main (int argc, char** argv, char** env)
         struct CgiHelpers {
             static void registerCgiFd(std::vector<struct pollfd>& pollfds, std::map<int, size_t>& map, int fd, size_t clientIdx, short events) {
                 if (fd < 0) return;
-                struct pollfd p; p.fd = fd; p.events = events; p.revents = 0; pollfds.push_back(p);
-                map[fd] = clientIdx;
+        struct pollfd p; p.fd = fd; p.events = events; p.revents = 0; pollfds.push_back(p);
+        map[fd] = clientIdx;
+        std::cerr << "registerCgiFd: registered fd=" << fd << " for clientIdx=" << clientIdx << " events=" << events << "\n";
             }
             static void unregisterCgiFds(std::vector<struct pollfd>& pollfds, std::map<int, size_t>& map, int infd, int outfd) {
                 if (infd >= 0) map.erase(infd);
                 if (outfd >= 0) map.erase(outfd);
                 for (size_t k = 0; k < pollfds.size(); ) {
                     if (pollfds[k].fd == infd || pollfds[k].fd == outfd) {
-                        close(pollfds[k].fd);
+            std::cerr << "unregisterCgiFds: removing fd=" << pollfds[k].fd << "\n";
+            close(pollfds[k].fd);
                         std::swap(pollfds[k], pollfds.back());
                         pollfds.pop_back();
                     } else ++k;
@@ -182,6 +185,7 @@ int main (int argc, char** argv, char** env)
                                     std::cout << "fd server = " << fd << std::endl;
                                     try {
                                         clients.push_back(Client(servers[j], client_fd));
+                                        clients.back().setEnv(env);
                                     }
                                     catch (const std::exception& e) {
                                         std::cerr << "Failed to store client: " << e.what() << std::endl;
@@ -210,6 +214,15 @@ int main (int argc, char** argv, char** env)
     								}
                                     // After parsing headers, try to read any immediately-available body
                                     clients.back().chargeBody();
+                                  /* // If chargeHeader/chargeBody started a CGI, register its fds now
+                                    if (clients.back().isCgiRunning()) {
+                                        int inFd = clients.back().getCgiInFd();
+                                        int outFd = clients.back().getCgiOutFd();
+                                        if (inFd >= 0 && cgiFdToClientIdx.count(inFd) == 0)
+                                            CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, inFd, clients.size() - 1, POLLOUT);
+                                        if (outFd >= 0 && cgiFdToClientIdx.count(outFd) == 0)
+                                            CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, outFd, clients.size() - 1, POLLIN);
+                                    }*/
                                     // If header is ready and either the method isn't POST or the body is ready, send now
                                     if (clients.back().getIsHeaderReady() == true
                                         && (clients.back().getMethod() != "POST" || clients.back().getIsBodyReady() == true))
@@ -225,7 +238,12 @@ int main (int argc, char** argv, char** env)
                                         }
                                         else
                                         {
-                                            pollfds[pollfds.size() - 1].events = POLLOUT;
+                                            // If the client is waiting for a CGI to finish, do not set POLLOUT
+                                            // (would cause sendResponse to be called repeatedly with no progress).
+                                            if (clients.back().isCgiRunning())
+                                                pollfds[pollfds.size() - 1].events = POLLIN;
+                                            else
+                                                pollfds[pollfds.size() - 1].events = POLLOUT;
                                         }
                                     }
                                     std::cout << "cualquier tonteria AQUI2\n";
@@ -250,15 +268,43 @@ int main (int argc, char** argv, char** env)
                                 if (clients[j].getIsHeaderReady() == false)
                                 {
                                     clients[j].chargeHeader();
+                                    // If chargeHeader started a CGI, register fds immediately
+                                    if (clients[j].isCgiRunning()) {
+                                        int inFd = clients[j].getCgiInFd();
+                                        int outFd = clients[j].getCgiOutFd();
+                                        if (inFd >= 0 && cgiFdToClientIdx.count(inFd) == 0)
+                                            CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, inFd, j, POLLOUT);
+                                        if (outFd >= 0 && cgiFdToClientIdx.count(outFd) == 0)
+                                            CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, outFd, j, POLLIN);
+                                    }
                                     // If chargeHeader completed and body is ready (e.g., GET), switch to POLLOUT so we can send response
                                     if (clients[j].getIsBodyReady() == true)
-                                        pollfds[i].events = POLLOUT;
+                                    {
+                                        if (clients[j].isCgiRunning())
+                                            pollfds[i].events = POLLIN;
+                                        else
+                                            pollfds[i].events = POLLOUT;
+                                    }
                                 }
                                 else
                                 {
                                     clients[j].chargeBody();
+                                    // If chargeBody started a CGI, register fds immediately
+                                    if (clients[j].isCgiRunning()) {
+                                        int inFd = clients[j].getCgiInFd();
+                                        int outFd = clients[j].getCgiOutFd();
+                                        if (inFd >= 0 && cgiFdToClientIdx.count(inFd) == 0)
+                                            CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, inFd, j, POLLOUT);
+                                        if (outFd >= 0 && cgiFdToClientIdx.count(outFd) == 0)
+                                            CgiHelpers::registerCgiFd(pollfds, cgiFdToClientIdx, outFd, j, POLLIN);
+                                    }
                                     if (clients[j].getIsBodyReady() == true)
-                                        pollfds[i].events = POLLOUT;
+                                    {
+                                        if (clients[j].isCgiRunning())
+                                            pollfds[i].events = POLLIN;
+                                        else
+                                            pollfds[i].events = POLLOUT;
+                                    }
                                 }
 								break ;
                             }
@@ -269,11 +315,21 @@ int main (int argc, char** argv, char** env)
                             size_t clientIdx = cgiFdToClientIdx[fd];
                             int revents = pollfds[i].revents;
                             clients[clientIdx].handleCgiFdEvent(fd, revents);
-                            // If CGI finished, unregister its fds
+                            // If CGI finished, unregister its fds and trigger sending response
                             if (!clients[clientIdx].isCgiRunning()) {
                                 int infd = clients[clientIdx].getCgiInFd();
                                 int outfd = clients[clientIdx].getCgiOutFd();
                                 CgiHelpers::unregisterCgiFds(pollfds, cgiFdToClientIdx, infd, outfd);
+                               // Try to send the response now that CGI is done.
+                                clients[clientIdx].sendResponse();
+                                // Find the pollfd for the client socket and set it to POLLOUT so sendResponse is called by the loop
+                                int clientFd = clients[clientIdx].getClientFd();
+                                for (size_t k = 0; k < pollfds.size(); ++k) {
+                                    if (pollfds[k].fd == clientFd) {
+                                        pollfds[k].events = POLLOUT;
+                                        break;
+                                    }
+                                }
                             }
                         }
 					}
@@ -292,12 +348,20 @@ int main (int argc, char** argv, char** env)
                             if (clients[j].getIsSent() == true)
                             {
                                 close(pollfds[i].fd);
-								std::swap(clients[j], clients.back());
-								clients.pop_back();
-								std::swap(pollfds[i], pollfds.back());
-								pollfds.pop_back();
-								if (i > 0)
-									--i;
+                                std::swap(clients[j], clients.back());
+                                clients.pop_back();
+                                std::swap(pollfds[i], pollfds.back());
+                                pollfds.pop_back();
+                                if (i > 0)
+                                    --i;
+                            }
+                            else
+                            {
+                                // If the client is waiting for CGI output, stop busy POLLOUT and wait for CGI fds.
+                                if (clients[j].isCgiRunning())
+                                {
+                                    pollfds[i].events = POLLIN;
+                                }
                             }
 							/*clients[j].handlewrite();
 							if (clients[j].isFinished())
@@ -326,7 +390,9 @@ int main (int argc, char** argv, char** env)
     }
     catch (const std::exception& e)
     {
-        std::cout << e.what() << std::endl;
+        //std::cout << e.what() << std::endl;
+		std::cerr << "Uncaught exception (" << typeid(e).name() << "): " << e.what() << std::endl;
+        return 1;
     }
 }
 

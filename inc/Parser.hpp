@@ -33,11 +33,12 @@ const std::string   configkeys[16] =
     "allowed_methods" // done
 };
 
-const std::string   cgikeys[3] =
+const std::string   cgikeys[4] =
 {
     ".py",
     ".php",
-    ".pl" 
+    ".pl",
+	".bla"
 };
 
 enum    State

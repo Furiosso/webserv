@@ -3,6 +3,8 @@
 #include <iomanip>
 #include <new>
 #include <cstring>
+#include <strings.h>
+#include <sstream>
 
 Client::Client(Server& listener, int fd) : _listener(listener), _fd(fd), _status(200), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine(""), _isSent(false), _isLocation(false)
 {
@@ -16,6 +18,9 @@ Client::Client(Server& listener, int fd) : _listener(listener), _fd(fd), _status
 	_cgi.write_pos = 0;
 	_cgi.in_closed = false;
 	_cgi.out_closed = false;
+
+	// do not duplicate env; caller may set it via setEnv
+	env = NULL;
 }
 
 Client::~Client()
@@ -42,6 +47,12 @@ Client::~Client()
 		}
 		_cgi.pid = -1;
 	}
+}
+
+void Client::setEnv(char **envp)
+{
+	// store pointer only; do not allocate or free memory
+	env = envp;
 }
 
 void Client::setListener(const Server& s) { this->_listener = s; }
@@ -255,6 +266,20 @@ void Client::	chargeHeader()
 				std::cerr << "Exception in setPath(): " << e.what() << std::endl;
 				this->_status = 500;
 			}
+			// If this is a GET/HEAD request, check and start CGI (if configured) after path resolution.
+			// If a CGI was started, return early: response will be produced when CGI finishes.
+			if (this->_status == 200 && (this->_headerContent.method == "GET" || this->_headerContent.method == "HEAD"))
+			{
+				if (handleCgiIfNeeded())
+				{
+					// mark header ready so higher layer can register fd events for CGI fds,
+					// but do not mark body ready: body will be provided by CGI when finished.
+					this->_request[0] = this->_header.substr(0, this->_header.find("\r\n"));
+					_isHeaderReady = true;
+					_isBodyReady = false;
+					return;
+				}
+			}
             std::cout << "CHARGE HEADER3\n";
 			std::cout << "error: " << this->_status << std::endl;
 			std::cout << "header path: " << this->_headerContent.path << std::endl;
@@ -331,6 +356,48 @@ static bool setNonBlocking(int fd)
     return (fcntl(fd, F_SETFL, flags) != -1);
 }
 
+/* Build a new envp (char*[] terminated by NULL) by merging parent_env and
+   extra variables (extras). The returned envp is allocated with new[] and
+   each string with new[]. Caller must free with freeEnvp(). */
+/*static char **buildEnvpFromMapAndParent(const std::map<std::string, std::string>& extras, char **parent_env)
+{
+	std::map<std::string, std::string> merged;
+	if (parent_env)
+	{
+		for (char **p = parent_env; *p != NULL; ++p)
+		{
+			std::string s(*p);
+			size_t eq = s.find('=');
+			if (eq == std::string::npos) continue;
+			std::string k = s.substr(0, eq);
+			std::string v = s.substr(eq + 1);
+			merged[k] = v;
+		}
+	}
+	for (std::map<std::string, std::string>::const_iterator it = extras.begin(); it != extras.end(); ++it)
+		merged[it->first] = it->second; // override or insert
+
+	char **envp = new char*[merged.size() + 1];
+	size_t i = 0;
+	for (std::map<std::string,std::string>::const_iterator it = merged.begin(); it != merged.end(); ++it)
+	{
+		std::string kv = it->first + "=" + it->second;
+		envp[i] = new char[kv.size() + 1];
+		std::strncpy(envp[i], kv.c_str(), kv.size() + 1);
+		++i;
+	}
+	envp[i] = NULL;
+	return envp;
+}
+
+static void freeEnvp(char **envp)
+{
+	if (!envp) return;
+	for (char **p = envp; *p != NULL; ++p)
+		delete [] *p;
+	delete [] envp;
+}*/
+
 bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter)
 {
 	int	inpipe[2];
@@ -354,8 +421,10 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 	}
 	else if (pid == 0)
 	{
-		dup2(inpipe[0], STDIN_FILENO);
-		dup2(outpipe[1], STDOUT_FILENO);
+		/* child: set up stdio from pipes */
+		if (dup2(inpipe[0], STDIN_FILENO) == -1) _exit(127);
+		if (dup2(outpipe[1], STDOUT_FILENO) == -1) _exit(127);
+		/* close both ends of pipes in child */
 		close(inpipe[0]);
 		close(inpipe[1]);
 		close(outpipe[0]);
@@ -364,7 +433,118 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		argv[0] = const_cast<char*>(interpreter.c_str());
 		argv[1] = const_cast<char*>(scriptPath.c_str());
 		argv[2] = NULL;
-		execve(argv[0], argv, NULL);
+		/* Change working directory to the script directory so relative imports/paths work. 
+		{
+			std::string dir = getDirectory(scriptPath);
+			if (!dir.empty())
+			{
+				if (chdir(dir.c_str()) != 0)
+				{
+					int se = errno;
+					std::cerr << "child: chdir to '" << dir << "' failed: " << strerror(se) << "\n";
+					_exit(127);
+				}
+			}
+		}
+
+		 Build argv dynamically. If interpreter looks like Python, request unbuffered mode. 
+		std::vector<char*> argv_vec;
+		bool python_unbuffered = false;
+		if (!interpreter.empty())
+		{
+			argv_vec.push_back(const_cast<char*>(interpreter.c_str()));
+			std::string li = interpreter;
+			if (li.find("python") != std::string::npos)
+			{
+				// request unbuffered python to avoid stdout buffering delaying the response
+				argv_vec.push_back(const_cast<char*>("-u"));
+				python_unbuffered = true;
+			}
+			argv_vec.push_back(const_cast<char*>(scriptPath.c_str()));
+		}
+		else
+		{
+			argv_vec.push_back(const_cast<char*>(scriptPath.c_str()));
+		}
+		argv_vec.push_back(NULL);
+		char **argv_exec = new char*[argv_vec.size()];
+		for (size_t ai = 0; ai < argv_vec.size(); ++ai) argv_exec[ai] = argv_vec[ai];
+
+		 Build richer CGI env from available request data and inherit parent's env
+		std::map<std::string,std::string> extras;
+		extras["REQUEST_METHOD"] = _headerContent.method;
+		extras["SERVER_PROTOCOL"] = _headerContent.protocol;
+		if (_headerContent.ContentLength > 0)
+		{
+			std::ostringstream __tmp_ss;
+			__tmp_ss << _headerContent.ContentLength;
+			extras["CONTENT_LENGTH"] = __tmp_ss.str();
+		}
+		if (!this->_headerContent.host.empty())
+			extras["SERVER_NAME"] = this->_headerContent.host;
+		// SCRIPT_FILENAME = filesystem path to script
+		extras["SCRIPT_FILENAME"] = scriptPath;
+		// Try to obtain original request URI (path + optional ?query)
+		std::string request_uri;
+		if (!this->_request[0].empty())
+		{
+			// request line stored as: "GET /path?query HTTP/1.1"
+			std::istringstream rs(this->_request[0]);
+			std::string method_token, uri_token, proto_token;
+			rs >> method_token >> uri_token >> proto_token;
+			request_uri = uri_token;
+		}
+		if (request_uri.empty())
+		{
+			// fallback: try to reconstruct from headerContent.path (may be filesystem path)
+			request_uri = _headerContent.path;
+		}
+		// split QUERY_STRING if present
+		size_t qpos = request_uri.find('?');
+		if (qpos != std::string::npos)
+		{
+			extras["SCRIPT_NAME"] = request_uri.substr(0, qpos);
+			extras["QUERY_STRING"] = request_uri.substr(qpos + 1);
+		}
+		else
+		{
+			extras["SCRIPT_NAME"] = request_uri;
+			extras["QUERY_STRING"] = std::string();
+		}
+		extras["REQUEST_URI"] = request_uri;
+		// DOCUMENT_ROOT: prefer location root if available
+		if (_isLocation)
+			extras["DOCUMENT_ROOT"] = _location.root;
+		else
+			extras["DOCUMENT_ROOT"] = _listener.getConfig().root;
+		// Standard CGI vars
+		extras["GATEWAY_INTERFACE"] = "CGI/1.1";
+		extras["SERVER_SOFTWARE"] = "webserv/0.1";
+
+		// If python, set PYTHONUNBUFFERED in the child env too
+		if (python_unbuffered)
+			extras["PYTHONUNBUFFERED"] = "1";
+
+		char **child_envp = buildEnvpFromMapAndParent(extras, env);
+
+		std::cerr << "child: execve with argv[0]=" << argv_exec[0] << "\n";
+		execve(argv_exec[0], argv_exec, child_envp);
+
+		// execve failed 
+		int savedErrno = errno;
+		std::cerr << "child: execve failed: errno=" << savedErrno << " (" << strerror(savedErrno) << ")\n";
+		freeEnvp(child_envp);
+		delete [] argv_exec;*/
+		// Debug: print argv so we can inspect what is being execve'd
+		std::cerr << "Argv[0]: " << argv[0] << " Argv[1]: "<< argv[1] << std::endl;
+		// Attempt to execute interpreter; on failure, print errno reason to stderr
+		execve(argv[0], argv, env);
+		int savedErrno = errno;
+		std::cerr << "execve failed: errno=" << savedErrno << " (" << strerror(savedErrno) << ")\n";
+		/*std::cerr << "child: execve failed: errno=" << savedErrno << " (" << strerror(savedErrno) << ")\n";
+		freeEnvp(child_envp);
+		delete [] argv_exec;*/
+		// Ensure child exits without flushing stdio buffers from parent state
 		_exit(127);
 	}
 	else
@@ -377,10 +557,23 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		_cgi.write_buf = this->_body;
 		_cgi.write_pos = 0;
 		_cgi.read_buf.clear();
+		// Clear any previous CGI content-type
+		_cgiContentType.clear();
 		_cgi.in_closed = false;
 		_cgi.out_closed = false;
 		setNonBlocking(_cgi.in_fd);
 		setNonBlocking(_cgi.out_fd);
+		// If there's no data to send to CGI stdin (common for GET/HEAD), close
+		// the write end in the parent to signal EOF to the child immediately.
+		// This prevents scripts that read from stdin from blocking.
+		if (_cgi.write_buf.empty() && _cgi.in_fd >= 0)
+		{
+			close(_cgi.in_fd);
+			_cgi.in_fd = -1;
+			_cgi.in_closed = true;
+		}
+		std::cerr << "startCgiNonBlocking (parent): pid=" << pid << " in_fd=" << _cgi.in_fd << " out_fd=" << _cgi.out_fd << " write_buf_size=" << _cgi.write_buf.size() << " in_closed=" << _cgi.in_closed << "\n";
+		//_isSent = true;
 		return true;
 	}
 	return false;
@@ -410,6 +603,7 @@ void Client::handleCgiFdEvent(int fd, short revents)
 {
 	if (!isCgiRunning())
 		return ;
+	std::cerr << "handleCgiFdEvent: fd=" << fd << " revents=" << revents << "\n";
 	if (revents & (POLLHUP | POLLERR | POLLNVAL))
     {
         if (fd == _cgi.in_fd && _cgi.in_fd >= 0)
@@ -457,26 +651,23 @@ void Client::handleCgiFdEvent(int fd, short revents)
 	{
 		char buf[4096];
 		ssize_t r = read(_cgi.out_fd, buf, sizeof(buf));
-		for (;;)
+		std::cerr << "handleCgiFdEvent: fd=" << fd << " read=" << r << std::endl;
+		if (r > 0)
+			_cgi.read_buf.append(buf, r);
+		else if (r == 0)
 		{
-			if (r > 0)
-				_cgi.read_buf.append(buf, r);
-			else if (r == 0)
-			{
-				 // EOF: child cerró stdout
+			// EOF: child cerró stdout
+			close(_cgi.out_fd);
+			_cgi.out_fd = -1;
+			_cgi.out_closed = true;
+		}
+		else
+		{
+			//error en read
+			if (_cgi.out_fd >= 0)
 				close(_cgi.out_fd);
-				_cgi.out_fd = -1;
-				_cgi.out_closed = true;
-			}
-			else
-			{
-				//error en read
-				if (_cgi.out_fd >= 0)
-					close(_cgi.out_fd);
-				_cgi.out_fd = -1;
-				_cgi.out_closed = true;
-			}
-			break ;
+			_cgi.out_fd = -1;
+			_cgi.out_closed = true;
 		}
 	}
 	finalizeCgiIfDone();
@@ -489,63 +680,88 @@ void Client::finalizeCgiIfDone()
 	if (!_cgi.out_closed)
 		return ;
 	int	status = 0;
+	std::cerr << "finalizeCgiIfDone: checking pid=" << _cgi.pid << " out_closed=" << _cgi.out_closed << " read_buf_size=" << _cgi.read_buf.size() << "\n";
 	pid_t w = waitpid(_cgi.pid, &status, WNOHANG);
+	std::cerr << "finalizeCgiIfDone: waitpid returned w=" << w << " errno=" << errno << "\n";
 	if (w == 0)
 		return ;
 	_cgi.pid = -1;
 	std::string &out = _cgi.read_buf;
+	// Accept both CRLFCRLF and LFLF as header/body separators from CGI output
 	size_t sep = out.find("\r\n\r\n");
 	std::string cgiHeaders;
 	std::string cgiBody;
-	if (sep == std::string::npos)
-		cgiBody = out;
-	else
+	if (sep != std::string::npos)
 	{
 		cgiHeaders = out.substr(0, sep);
 		cgiBody = out.substr(sep + 4);
 	}
+	else
+	{
+		sep = out.find("\n\n");
+		if (sep != std::string::npos)
+		{
+			cgiHeaders = out.substr(0, sep);
+			cgiBody = out.substr(sep + 2);
+		}
+		else
+		{
+			// No header separator found: treat entire output as body
+			cgiBody = out;
+		}
+	}
 	int cgiStatus = 200;
 	if (!cgiHeaders.empty())
 	{
+		// Accept either CRLF or LF line separators from CGI output
 		size_t pos = 0;
 		while (pos < cgiHeaders.size())
 		{
-			size_t lineEnd = cgiHeaders.find("\r\n", pos);
-            if (lineEnd == std::string::npos)
-                lineEnd = cgiHeaders.size();
-            std::string line = cgiHeaders.substr(pos, lineEnd - pos);
-            // trim leading spaces
-            size_t i = 0;
-            while (i < line.size() && std::isspace(line[i]))
-				++i;
-            if (i < line.size())
-                line = line.substr(i);
-            // procesar "Status: 201 OK" o "Content-Length: N"
-            if (line.size() >= 7 &&  line.find("Status:") == 0)
-            {
-                // extraer número de status en la línea
-                size_t j = 7;
-                while (j < line.size() && std::isspace(line[i]))
-					++j;
-                std::string num;
-                while (j < line.size() && std::isdigit(line[i]))
-				{
-					num.push_back(line[j]);
-					++j;
-				}
-                if (!num.empty())
-                {
-                    std::istringstream ss(num);
-                    ss >> cgiStatus;
-                }
-            }
-            // otras cabeceras (Content-Length/Content-Type) las puedes parsear si tienes estructura de respuesta
-            pos = lineEnd + 2;
+			size_t lineEnd = cgiHeaders.find('\n', pos);
+			if (lineEnd == std::string::npos)
+				lineEnd = cgiHeaders.size();
+			// trim possible \r at end
+			size_t len = lineEnd - pos;
+			if (len > 0 && cgiHeaders[lineEnd - 1] == '\r')
+				--len;
+			std::string line = cgiHeaders.substr(pos, len);
+			// trim leading spaces
+			size_t i = 0;
+			while (i < line.size() && std::isspace(static_cast<unsigned char>(line[i]))) ++i;
+			if (i < line.size()) line = line.substr(i);
+
+			if (line.size() >= 7 && line.find("Status:") == 0)
+			{
+				// extract numeric status
+				size_t j = 7;
+				while (j < line.size() && std::isspace(static_cast<unsigned char>(line[j]))) ++j;
+				std::string num;
+				while (j < line.size() && std::isdigit(static_cast<unsigned char>(line[j]))) { num.push_back(line[j]); ++j; }
+				if (!num.empty()) { std::istringstream ss(num); ss >> cgiStatus; }
+			}
+			else if (line.size() >= 13 && strncasecmp(line.c_str(), "Content-Type:", 13) == 0)
+			{
+				size_t k = 13;
+				while (k < line.size() && std::isspace(static_cast<unsigned char>(line[k]))) ++k;
+				_cgiContentType = line.substr(k);
+			}
+			else if (line.size() >= 15 && strncasecmp(line.c_str(), "Content-Length:", 15) == 0)
+			{
+				size_t k = 15;
+				while (k < line.size() && std::isspace(static_cast<unsigned char>(line[k]))) ++k;
+				std::string num = line.substr(k);
+				std::istringstream ss(num);
+				size_t clen = 0; ss >> clen;
+				// optional: validate length vs cgiBody.size()
+			}
+			pos = lineEnd + 1;
 		}
 	}
 	this->_body = cgiBody;
 	this->_status = cgiStatus;
 	this->_isBodyReady = true;
+
+	std::cerr << "finalizeCgiIfDone: client fd=" << this->_fd << " status=" << this->_status << " body_size=" << this->_body.size() << "\n";
 
 	if (_cgi.in_fd >= 0)
 	{
@@ -559,16 +775,36 @@ void Client::finalizeCgiIfDone()
 	}
     _cgi.in_closed = true;
     _cgi.out_closed = true;
+	//_isSent = true;
+
+	// Try to send the response immediately now that CGI finished and _body/_status are set.
+	// main will also trigger sendResponse() via poll when appropriate, but sending here
+	// avoids waiting an extra poll iteration and unblocks clients faster.
+	this->sendResponse();
 }
 
-void	Client::handleCgiIfNeeded()
+bool	Client::handleCgiIfNeeded()
 {
-	if (checkExtention(this->_headerContent.path, ".py"))
+	// Build CGI map: server-level then overlay location-level
+	std::map<std::string,std::string> cgiMap = _listener.getConfig().cgi;
+	if (this->_isLocation)
 	{
-		std::string interp = "/usr/bin/python3";
-		if (!startCgiNonBlocking(this->_headerContent.path, interp))
-			_status = 500;
+		std::map<std::string,std::string>::const_iterator it = _location.cgi.begin();
+		for (; it != _location.cgi.end(); ++it)
+			cgiMap[it->first] = it->second;
 	}
+	std::string ext = getExtension(this->_headerContent.path);
+	if (cgiMap.count(ext))
+	{
+		std::string interp = cgiMap[ext];
+		if (!startCgiNonBlocking(this->_headerContent.path, interp))
+		{
+			_status = 500;
+			return false;
+		}
+		return true;
+	}
+	return false;
 }
 
 void Client::parseHeader()
@@ -641,8 +877,24 @@ void Client::parseHeader()
 		return ;
 	}
 	this->_headerContent.path = urlDecode(token);
-	/*if (checkExtention(this->_headerContent.path, ".py") == true)
-		;//desviar el flujo hacia el gestor de cgi*/
+	std::string ext = getExtension(_headerContent.path);
+	std::map<std::string,std::string> cgiMap;
+	//cgiMap = 
+	if (cgiMap.count(ext))
+    {
+    // start CGI non-blocking (body already in _body)
+        if (!isCgiRunning())
+		{
+			if (!startCgiNonBlocking(this->_headerContent.path, cgiMap[ext]))
+			{
+				this->_status = 500;
+				return;
+			}
+		}
+        // response will be produced when CGI finishes (finalizeCgiIfDone)
+		//_isSent = true;
+        return;
+    }
 	std::cout << "path: " << token << std::endl;
 	token = "";
 	while (*begin == ' ')
@@ -820,10 +1072,10 @@ void	Client::setPath()
 					index = it->index;
 				if (_listener.getConfig().isAutoindex == true)
 					autoindex = _listener.getConfig().autoindex;
-            	std::cout << "POST CHECK = _listener.getConfig().isAutoindex == true\n";
+            	//std::cout << "POST CHECK = _listener.getConfig().isAutoindex == true\n";
 				if (it->isAutoindex == true)
 					autoindex = it->autoindex;
-            	std::cout << "POST AUTO == TRUE\n";
+            	//std::cout << "POST AUTO == TRUE\n";
 				if (it->isAlias)
 				{
 					std::string	rest = _headerContent.path.substr(it->path.size());
@@ -838,7 +1090,7 @@ void	Client::setPath()
 					_headerContent.path = it->root + _headerContent.path;
 					_headerContent.root = it->root;
 					checkPathValidity(_headerContent.path, index, autoindex, it->root);
-            		std::cout << "POST CHECK is root\n";
+            		//std::cout << "POST CHECK is root\n";
 					return ;
 				}
 				_headerContent.path = _listener.getConfig().root + _headerContent.path;
@@ -1141,6 +1393,7 @@ void	Client::flushResponse()
 	while (!_sendBuffer.empty())
 	{
 		bytesSent = send(this->_fd, _sendBuffer.c_str(), _sendBuffer.size(), 0);
+		std::cerr << "flushResponse: fd=" << this->_fd << " try_send=" << _sendBuffer.size() << " got=" << bytesSent << " errno=" << errno << "\n";
 		if (bytesSent > 0)
 			_sendBuffer.erase(0, bytesSent);
 		else if (bytesSent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
@@ -1413,15 +1666,21 @@ void	Client::sendResponse()
 				return;
 			}
 			std::string ext = getExtension(_headerContent.path);
-			std::map<std::string,std::string> cgiMap = _listener.getConfig().cgi; //location.cgi
+			std::map<std::string,std::string> cgiMap;
+			if (_isLocation)
+				cgiMap = _location.cgi;
+			else
+				cgiMap = _listener.getConfig().cgi; //location.cgi
 			if (cgiMap.count(ext))
     		{
-    		    // start CGI non-blocking (body already in _body)
-    		    if (!startCgiNonBlocking(this->_headerContent.path, cgiMap[ext]))
-    		    {
-    		        this->_status = 500;
-    		        return;
-    		    }
+    		    if (!isCgiRunning())
+				{
+					if (!startCgiNonBlocking(this->_headerContent.path, cgiMap[ext]))
+					{
+						this->_status = 500;
+						return;
+					}
+				}
     		    // response will be produced when CGI finishes (finalizeCgiIfDone)
     		    return;
     		}
@@ -1498,7 +1757,48 @@ void	Client::sendResponse()
 			if (_hasErrorPageResolved && !_errorResolvedPath.empty())
 				body = loadContent(_errorResolvedPath);
 			else
+				body.clear();
+
+			// Check CGI for GET/HEAD: if the requested path corresponds to a CGI script
+			// Prefer using the CGI-provided body (set by finalizeCgiIfDone). Only start
+			// the CGI if we don't already have a body and the CGI is not running.
+			if (this->_headerContent.method == "GET" || this->_headerContent.method == "HEAD")
+			{
+				std::string ext = getExtension(_headerContent.path);
+				std::map<std::string,std::string> cgiMap;
+				if (_isLocation)
+					cgiMap = _location.cgi;
+				else
+					cgiMap = _listener.getConfig().cgi;
+				if (cgiMap.count(ext))
+				{
+					// If CGI already produced a body, use it
+					if (this->_isBodyReady && !this->_body.empty())
+					{
+						body = this->_body;
+					}
+					else
+					{
+						// No body yet: start CGI (if not running) and wait for finalizeCgiIfDone
+						if (!isCgiRunning())
+						{
+							if (!startCgiNonBlocking(this->_headerContent.path, cgiMap[ext]))
+							{
+								this->_status = 500;
+								return;
+							}
+						}
+						// Response will be produced by finalizeCgiIfDone()
+						return;
+					}
+				}
+			}
+
+			// If not CGI or CGI produced body, and body still empty, load file content
+			if (body.empty())
+			{
 				body = loadContent(this->_headerContent.path);
+			}
 		}
 
 		// Only set default 200 if status indicates success-range
@@ -1513,18 +1813,10 @@ void	Client::sendResponse()
 		std::ostringstream hs;
 		hs << this->_headerContent.protocol << " " << _status << " " << reasonPhrase(_status) << "\r\n";
 		hs << "Content-Length: " << body.size() << "\r\n";
-		// === INSERT SWITCH BY HTTP METHOD HERE ===
-		// Single-line notes for implementation:
-		// 1) Add: switch (this->_headerContent.method) { case "GET": case "HEAD": case "POST": case "DELETE": }
-		// 2) For GET: if file -> body as loaded; if dir+autoindex -> body already generated above; set status 200.
-		// 3) For HEAD: same as GET but do not append body later (respect method when adding body to _sendBuffer).
-		// 4) For POST: if CGI -> initiate startCgiNonBlocking(...) here (only after body received) and set up _cgi.write_buf; set appropriate status (201/200) or delegate to CGI handling.
-		// 5) For DELETE: try unlink(joinPath(root, requested)); set _status = 204 on success or 404/403 on failure.
-		// 6) Ensure any filesystem ops check isWithinRoot(...) and access(..., R_OK/W_OK) before acting.
-		// 7) After switch, prepare `body` (or leave empty for HEAD/204) and set content-type accordingly.
-		// 8) Do NOT block for long operations; prefer non-blocking or spawn CGI as done elsewhere.
-		// If we produced an autoindex listing, declare it as HTML so browsers render it instead of downloading
-		if (this->_headerContent.isAutoindexResponse || (_status > 299 && _status < 600))
+		// Prefer CGI-specified Content-Type when available
+		if (!this->_cgiContentType.empty())
+			hs << "Content-Type: " << this->_cgiContentType << "\r\n";
+		else if (this->_headerContent.isAutoindexResponse || (_status > 299 && _status < 600))
 			hs << "Content-Type: text/html\r\n";
 		else
 			hs << "Content-Type: " << getMimeType(this->_headerContent.path) << "\r\n";
@@ -1579,4 +1871,3 @@ std::string	Client::loadContent(const std::string& filename) const
 
 
 bool	Client::getIsSent() const { return _isSent; }
-
