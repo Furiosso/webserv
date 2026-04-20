@@ -980,24 +980,6 @@ void Client::parseHeader()
 		return ;
 	}
 	this->_headerContent.path = urlDecode(token);
-	//std::string ext = getExtension(_headerContent.path);
-	/*std::map<std::string,std::string> cgiMap;
-	//cgiMap = 
-	if (cgiMap.count(ext))
-    {
-    // start CGI non-blocking (body already in _body)
-        if (!isCgiRunning())
-		{
-			if (!startCgiNonBlocking(this->_headerContent.path, cgiMap[ext]))
-			{
-				this->_status = 500;
-				return;
-			}
-		}
-        // response will be produced when CGI finishes (finalizeCgiIfDone)
-		//_isSent = true;
-        return;
-    }*/
 	std::cout << "path: " << token << std::endl;
 	token = "";
 	while (*begin == ' ')
@@ -1035,80 +1017,68 @@ void Client::parseHeader()
 	while (*begin == ' ')
 		++begin;
 	begin += 2;
-	while (this->_header.find("\r\n") != std::string::npos) // revisar ete bucle
+	// Parse header lines robustly: split by CRLF, then split each line at the
+	// first ':' to obtain name and value. This avoids tokenization issues
+	// caused by spaces or ':' inside header values.
 	{
-		line = this->_header.substr(0, this->_header.find("\r\n")); 
-		// Accept any header line that contains a ':' separating name and value.
-		// Previous check relied on wordCounter which broke when header values contain ':' (e.g. URLs).
-		size_t colonPos = line.find(":");
-		if (colonPos == std::string::npos)
+		std::string hdrs = this->_header;
+		std::vector<std::string> header_lines;
+		while (!hdrs.empty())
 		{
-			std::cout << "invalid header line: " << line << std::endl;
-			this->_status = 400;
-			return ;
-		}
-		begin = line.begin();
-		end = line.end();
-		while (begin != end)
-		{
-			switch (*begin)
+			size_t p = hdrs.find("\r\n");
+			if (p == std::string::npos)
 			{
-				case ' ':
-					if (!token.empty())
-					{
-						tokens.push_back(token);
-						token = "";
-					}
-					break ;
-				case ':':
-					if (!token.empty())
-					{
-						tokens.push_back(token);
-						token = "";
-					}
-					tokens.push_back(":");
-					break ;
-				default:
-					token.push_back(*begin);
-					//token = "";
+				header_lines.push_back(hdrs);
+				hdrs.clear();
 			}
-			++begin;
-		}
-		this->_header = this->_header.substr(this->_header.find("\r\n") + 2);
-		std::cout << "this->_header:\n" << this->_header  << std::endl << std::endl;
-	}
-	// Debug: dump parsed tokens for header inspection
-	/*std::cout << "DEBUG parseHeader: tokens(" << tokens.size() << ") = ";
-	for (size_t ti = 0; ti < tokens.size(); ++ti)
-		std::cout << "[" << tokens[ti] << "] ";
-	std::cout << "\n";*/
-	std::vector<std::string>::iterator	vegin = tokens.begin();
-	std::vector<std::string>::iterator	vend = tokens.end();
-	for (; vegin != vend; ++vegin) // revisar este bucle
-	{
-		//std::cout << "DEBUG token at vegin: '" << *vegin << "'\n";
-		if ((vegin + 1) != vend && (vegin + 2) != vend && strToLower(*vegin) == "content-length")
-		{
-			if (this->_headerContent.isChunked == true)
+			else
 			{
-				this->_status = 404;
-				return ;
+				header_lines.push_back(hdrs.substr(0, p));
+				hdrs = hdrs.substr(p + 2);
 			}
-			if (*(vegin + 1) == ":")
+		}
+		// Iterate header lines and extract relevant headers
+		for (size_t hi = 0; hi < header_lines.size(); ++hi)
+		{
+			std::string line = header_lines[hi];
+			if (line.empty()) continue;
+			size_t colonPos = line.find(":");
+			if (colonPos == std::string::npos)
 			{
+				std::cout << "invalid header line: " << line << std::endl;
+				this->_status = 400;
+				return;
+			}
+			std::string name = line.substr(0, colonPos);
+			std::string value = line.substr(colonPos + 1);
+			// trim
+			while (!name.empty() && (name[0] == ' ' || name[0] == '\t')) name.erase(name.begin());
+			while (!name.empty() && (name[name.size() - 1] == ' ' || name[name.size() - 1] == '\t')) name.erase(name.end()-1);
+			while (!value.empty() && (value[0] == ' ' || value[0] == '\t')) value.erase(value.begin());
+			while (!value.empty() && (value[value.size() - 1] == ' ' || value[value.size() - 1] == '\t')) value.erase(value.end()-1);
+			std::string lname = strToLower(name);
+			if (lname == "content-length")
+			{
+				if (this->_headerContent.isChunked == true)
+				{
+					this->_status = 404;
+					return;
+				}
 				size_t num = 0;
-				std::stringstream s(*(vegin + 2));
-				s >> num;
+				std::istringstream ss(value);
+				ss >> num;
 				checkContentLength(num);
 				this->_headerContent.ContentLength = num;
 			}
+			else if (lname == "transfer-encoding")
+			{
+				if (strToLower(value).find("chunked") != std::string::npos)
+					this->_headerContent.isChunked = true;
+			}
 		}
-		if ((vegin + 1) != vend && (vegin + 2) != vend && strToLower(*vegin) == "transfer-encoding")
-		{
-			// Do not require Content-Length when Transfer-Encoding: chunked is present.
-			if (*(vegin + 1) == ":" && strToLower(*(vegin + 2)) == "chunked")
-				this->_headerContent.isChunked = true;
-		}
+		// Debug: dump header summary
+		std::cerr << "parseHeader: headers_received=" << this->_header << "\n";
+		std::cerr << "parseHeader: ContentLength=" << this->_headerContent.ContentLength << " isChunked=" << this->_headerContent.isChunked << "\n";
 	}
 }
 
@@ -1450,7 +1420,7 @@ void	Client::chargeBody()
 	if (this->_headerContent.method != "POST")
 		return ;
 	//std::cout << "ENTER chargeBody fd=" << this->_fd << " path=" << this->_headerContent.path << "\n";
-	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
+	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer), 0); // sustituir el tamaño del buffer a una macro
 	//std::cout << "chargeBody: recv returned " << bytesRead << " on fd=" << this->_fd << "\n";
 	if (bytesRead < 0)
 	{
@@ -1462,21 +1432,50 @@ void	Client::chargeBody()
 	}
 	else if (bytesRead == 0)
 	{
-		// cliente cerró la conexión: marcar error para que el main limpie
-        this->_status = 200; // o usa un flag específico; main debe detectar bytes==0 y cerrar
-        // marca header/body como no listos y deja que main elimine este Client
-        return;
+		// cliente cerró la conexión: if we already have the expected body length,
+		// mark body ready. Otherwise treat as premature EOF and set an error.
+		if (!this->_headerContent.isChunked)
+		{
+			if (this->_headerContent.ContentLength != 0)
+			{
+				if (this->_body.size() >= this->_headerContent.ContentLength)
+				{
+					if (this->_body.size() > this->_headerContent.ContentLength)
+						this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
+					this->_isBodyReady = true;
+					this->_request[1] = this->_body;
+					std::cout << "chargeBody: EOF but body complete, size=" << this->_body.size() << "\n";
+					return;
+				}
+				// premature EOF
+				this->_status = 400;
+				return;
+			}
+			else
+			{
+				// No Content-Length and connection closed -> accept current body
+				this->_isBodyReady = true;
+				this->_request[1] = this->_body;
+				std::cout << "chargeBody: EOF with no Content-Length, size=" << this->_body.size() << "\n";
+				return;
+			}
+		}
+		// For chunked transfer, rely on chunkManagement to set _isBodyReady; treat this as error
+		this->_status = 400;
+		return;
 	}
 	else
 	{
-		this->_buffer[bytesRead] = '\0'; // Null-terminate the buffer
+		// Append raw bytes (binary-safe)
 		if (this->_headerContent.isChunked == true)
 		{
+			// For chunked mode, append the newly-received bytes into the chunkLine
+			this->_chunkLine.append(this->_buffer, bytesRead);
 			chunkManagement();
 			ft_bzero(this->_buffer, sizeof(this->_buffer));
 			return ;
 		}
-		this->_body += this->_buffer; // Append to the request string
+		this->_body.append(this->_buffer, bytesRead); // Append raw bytes
 		if (this->_headerContent.ContentLength <= this->_body.size())
 		{
 			if (this->_body.size() > this->_headerContent.ContentLength)
