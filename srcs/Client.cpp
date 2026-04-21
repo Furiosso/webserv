@@ -209,8 +209,8 @@ void Client::	chargeHeader()
 	if (bytesRead < 0)
 	{
 		// In non-blocking mode, EAGAIN/EWOULDBLOCK mean "no data available now" — not a fatal error.
-		/*if (errno == EAGAIN || errno == EWOULDBLOCK)
-			return;*/
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return;
 		std::cerr << "Error reading from socket (fd " << this->_fd << "): " << strerror(errno) << std::endl;
 		return;
 	}
@@ -1425,11 +1425,8 @@ void	Client::chargeBody()
 	if (bytesRead < 0)
 	{
 		// Non-blocking sockets will often return EAGAIN/EWOULDBLOCK when there's no data yet.
-		/*if (errno == EAGAIN || errno == EWOULDBLOCK)
-		{
-			std::cerr << "chargeBody: fd=" << this->_fd << " recv=EAGAIN\n";
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
 			return;
-		}*/
 		std::cerr << "Error reading from socket (fd " << this->_fd << "): " << strerror(errno) << std::endl;
 		return;
 	}
@@ -1447,7 +1444,6 @@ void	Client::chargeBody()
 						this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
 					this->_isBodyReady = true;
 					this->_request[1] = this->_body;
-					std::cout << "chargeBody: EOF but body complete, size=" << this->_body.size() << "\n";
 					return;
 				}
 				// premature EOF
@@ -1459,7 +1455,6 @@ void	Client::chargeBody()
 				// No Content-Length and connection closed -> accept current body
 				this->_isBodyReady = true;
 				this->_request[1] = this->_body;
-				std::cout << "chargeBody: EOF with no Content-Length, size=" << this->_body.size() << "\n";
 				return;
 			}
 		}
