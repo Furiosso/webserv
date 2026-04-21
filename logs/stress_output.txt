@@ -1,3 +1,0 @@
-Stress summary for 127.0.0.1:9999/: concurrency=20, duration=20
-Total requests: 2131484  OK: 0  Fail: 2131484
-Availability: 0.00%
