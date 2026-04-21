@@ -211,7 +211,6 @@ static const char* reasonPhrase(int code)
 		default: return "Unknown HTTP Status";
 	}
 }
-}
 
 // Decode percent-encoded URL path (e.g. %2B -> +, %23 -> #). Does not
 // interpret '+' as space because in path components '+' is literal.
