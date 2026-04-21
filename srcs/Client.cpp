@@ -209,8 +209,8 @@ void Client::	chargeHeader()
 	if (bytesRead < 0)
 	{
 		// In non-blocking mode, EAGAIN/EWOULDBLOCK mean "no data available now" — not a fatal error.
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
-			return;
+		/*if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return;*/
 		std::cerr << "Error reading from socket (fd " << this->_fd << "): " << strerror(errno) << std::endl;
 		return;
 	}
@@ -1425,8 +1425,11 @@ void	Client::chargeBody()
 	if (bytesRead < 0)
 	{
 		// Non-blocking sockets will often return EAGAIN/EWOULDBLOCK when there's no data yet.
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
+		/*if (errno == EAGAIN || errno == EWOULDBLOCK)
+		{
+			std::cerr << "chargeBody: fd=" << this->_fd << " recv=EAGAIN\n";
 			return;
+		}*/
 		std::cerr << "Error reading from socket (fd " << this->_fd << "): " << strerror(errno) << std::endl;
 		return;
 	}
@@ -1466,7 +1469,7 @@ void	Client::chargeBody()
 	}
 	else
 	{
-		// Append raw bytes (binary-safe)
+	// Append raw bytes (binary-safe)
 		if (this->_headerContent.isChunked == true)
 		{
 			// For chunked mode, append the newly-received bytes into the chunkLine
@@ -1475,7 +1478,8 @@ void	Client::chargeBody()
 			ft_bzero(this->_buffer, sizeof(this->_buffer));
 			return ;
 		}
-		this->_body.append(this->_buffer, bytesRead); // Append raw bytes
+	this->_body.append(this->_buffer, bytesRead); // Append raw bytes
+	std::cerr << "chargeBody: fd=" << this->_fd << " recv=" << bytesRead << " total_body=" << this->_body.size() << " target=" << this->_headerContent.ContentLength << "\n";
 		if (this->_headerContent.ContentLength <= this->_body.size())
 		{
 			if (this->_body.size() > this->_headerContent.ContentLength)

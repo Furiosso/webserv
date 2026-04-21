@@ -1,0 +1,14 @@
+srcs/main.cpp:290:							// - handleRead(): recv() hasta terminar header/body o EGAIN
+srcs/main.cpp:380:                            // - handleWrite(): write() hasta terminar o EAGAIN
+srcs/main.cpp:411:							/*clients[j].handlewrite();
+srcs/Client.cpp:208:	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
+srcs/Client.cpp:259:			// been received together with the headers in the same recv().
+srcs/Client.cpp:273:				ssize_t s = send(this->_fd, cont, std::strlen(cont), 0);
+srcs/Client.cpp:680:			ssize_t	w = write(_cgi.in_fd, buf, to_write);
+srcs/Client.cpp:702:		ssize_t r = read(_cgi.out_fd, buf, sizeof(buf));
+srcs/Client.cpp:766:			ssize_t r = read(_cgi.out_fd, tmpbuf, sizeof(tmpbuf));
+srcs/Client.cpp:1423:	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer), 0); // sustituir el tamaño del buffer a una macro
+srcs/Client.cpp:1501:		bytesSent = send(this->_fd, _sendBuffer.c_str(), _sendBuffer.size(), 0);
+srcs/Client.cpp:1810:				ssize_t w = write(fd, buf + written, to_write);
+srcs/Client.cpp:1950:		file.read(&buffer[0], size);
+srcs/Client.cpp:1974:	file.read(&buffer[0], size);

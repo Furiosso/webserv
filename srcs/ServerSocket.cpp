@@ -149,8 +149,8 @@ int	ServerSocket::acceptNewClient(int listen_fd)
 	int						client_fd = accept(listen_fd, (struct sockaddr*)&peer, &plen);
 	if (client_fd < 0)
 	{
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
-			return -1;
+		/*if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return -1;*/
 		std::cerr << "accept error: " << strerror(errno) << std::endl;
 		return -1;
 	}
