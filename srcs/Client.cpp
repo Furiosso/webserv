@@ -8,8 +8,7 @@
 #include <strings.h>
 #include <sstream>
 
-Client::Client(Server& listener, int fd) : _listener(listener), _fd(fd), _status(200), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine(""), _isSent(false), _isLocation(false)
-{
+Client::Client(Server& listener, int fd) : _listener(listener), _fd(fd), _status(200), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine(""), _isSent(false), _isLocation(false){
 	_headerContent.isChunked = false;
 	_headerContent.ContentLength = 0;
 	_headerContent.isAutoindexResponse = false;
@@ -136,24 +135,82 @@ static const char* reasonPhrase(int code)
 {
 	switch (code)
 	{
+		/* 1xx Informational */
+		case 100: return "Continue";
+		case 101: return "Switching Protocols";
+		case 102: return "Processing";
+		case 103: return "Early Hints";
+
+		/* 2xx Success */
 		case 200: return "OK";
 		case 201: return "Created";
+		case 202: return "Accepted";
+		case 203: return "Non-Authoritative Information";
 		case 204: return "No Content";
+		case 205: return "Reset Content";
+		case 206: return "Partial Content";
+		case 207: return "Multi-Status";
+		case 208: return "Already Reported";
+		case 226: return "IM Used";
+
+		/* 3xx Redirection */
+		case 300: return "Multiple Choices";
+		case 301: return "Moved Permanently";
+		case 302: return "Found";
+		case 303: return "See Other";
+		case 304: return "Not Modified";
+		case 305: return "Use Proxy";
+		case 306: return "Unused";
+		case 307: return "Temporary Redirect";
+		case 308: return "Permanent Redirect";
+
+		/* 4xx Client Errors */
 		case 400: return "Bad Request";
 		case 401: return "Unauthorized";
+		case 402: return "Payment Required";
 		case 403: return "Forbidden";
 		case 404: return "Not Found";
 		case 405: return "Method Not Allowed";
+		case 406: return "Not Acceptable";
+		case 407: return "Proxy Authentication Required";
+		case 408: return "Request Timeout";
+		case 409: return "Conflict";
+		case 410: return "Gone";
+		case 411: return "Length Required";
+		case 412: return "Precondition Failed";
 		case 413: return "Payload Too Large";
 		case 414: return "URI Too Long";
 		case 415: return "Unsupported Media Type";
+		case 416: return "Range Not Satisfiable";
+		case 417: return "Expectation Failed";
+		case 418: return "I'm a teapot";
+		case 421: return "Misdirected Request";
+		case 422: return "Unprocessable Content";
+		case 423: return "Locked";
+		case 424: return "Failed Dependency";
+		case 425: return "Too Early";
+		case 426: return "Upgrade Required";
+		case 428: return "Precondition Required";
+		case 429: return "Too Many Requests";
+		case 431: return "Request Header Fields Too Large";
+		case 451: return "Unavailable For Legal Reasons";
+
+		/* 5xx Server Errors */
 		case 500: return "Internal Server Error";
 		case 501: return "Not Implemented";
 		case 502: return "Bad Gateway";
+		case 503: return "Service Unavailable";
 		case 504: return "Gateway Timeout";
 		case 505: return "HTTP Version Not Supported";
-		default: return "Error";
+		case 506: return "Variant Also Negotiates";
+		case 507: return "Insufficient Storage";
+		case 508: return "Loop Detected";
+		case 510: return "Not Extended";
+		case 511: return "Network Authentication Required";
+
+		default: return "Unknown HTTP Status";
 	}
+}
 }
 
 // Decode percent-encoded URL path (e.g. %2B -> +, %23 -> #). Does not
@@ -1502,6 +1559,8 @@ void	Client::flushResponse()
 		else
 			break ;	
 	}
+	_errorResolvedPath.clear();
+	_headerContent.path.clear();
 	_isSent = _sendBuffer.empty();
 }
 
@@ -1544,7 +1603,7 @@ void	Client::handleDelete()
 	_status = 204;
 }
 
-void	Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& errorPages)
+/*void	Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& errorPages)
 {
 	std::map<std::pair<int, int>, std::string>::const_iterator it = errorPages.begin();
 	std::map<std::pair<int, int>, std::string>::const_iterator end = errorPages.end();
@@ -1553,9 +1612,10 @@ void	Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& 
 	{
 		if (it->first.first != _status)
 			continue;
+		std::cout << "*******************FIRST.FIRST: " << it->first.first << " | FIRST.SECOND: " << it->first.second << "***************" << std::endl;
 		if (it->first.first != it->first.second)
 			_status = it->first.second;
-		_headerContent.path = it->second;
+		//_headerContent.path = it->second;
 		std::string target = it->second;
 		while (!target.empty() && (target[0] == ' ' || target[0] == '\t'))
 			target.erase(0, 1);
@@ -1568,6 +1628,7 @@ void	Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& 
 			_hasErrorPageResolved = true;
 			return;
 		}
+		_headerContent.path = target;
 		// Local URI or relative path -> resolve to filesystem path using location or server root
 		std::string root = _listener.getConfig().root;
 		if (_isLocation)
@@ -1598,62 +1659,132 @@ void	Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& 
 			return;
 		}
 	}
+}*/
+
+void Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& errorPages)
+{
+    std::map<std::pair<int, int>, std::string>::const_iterator it = errorPages.begin();
+    std::map<std::pair<int, int>, std::string>::const_iterator end = errorPages.end();
+
+    for (; it != end; ++it)
+    {
+        if (it->first.first != _status)
+            continue;
+
+        std::cout << "*******************FIRST.FIRST: "
+                  << it->first.first << " | FIRST.SECOND: "
+                  << it->first.second << "***************" << std::endl;
+
+        std::string target = it->second;
+
+        // trim
+        while (!target.empty() && (target[0] == ' ' || target[0] == '\t'))
+            target.erase(0, 1);
+        while (!target.empty() && (target[target.size() - 1] == ' ' || target[target.size() - 1] == '\t'))
+            target.erase(target.size() - 1);
+
+        // 🔴 CASO 1: =code → REDIRECT (externo o interno)
+        if (it->first.first != it->first.second)
+        {
+            _status = it->first.second;
+            _redirectLocation = target;
+            _hasErrorPageResolved = true;
+            return;
+        }
+
+        // 🔵 CASO 2: SIN =code → servir fichero (internal error page)
+
+        // NO tocar path global directamente aún
+        std::string root = _listener.getConfig().root;
+        if (_isLocation)
+            root = _location.root;
+
+        std::string resolved;
+
+        if (!target.empty() && target[0] == '/')
+        {
+            if (!root.empty() && root[root.size() - 1] == '/')
+                resolved = root + target.substr(1);
+            else
+                resolved = root + target;
+        }
+        else
+        {
+            if (!root.empty() && root[root.size() - 1] == '/')
+                resolved = root + target;
+            else
+                resolved = root + "/" + target;
+        }
+
+        // validar path
+        if (!resolved.empty() && isWithinRoot(resolved, root) && access(resolved.c_str(), R_OK) == 0)
+        {
+            _errorResolvedPath = resolved;
+            _hasErrorPageResolved = true;
+            return;
+        }
+
+        // si falla, no hacemos nada → caerá en default error page
+    }
 }
 
-void	Client::chargeStatusData(std::map<std::pair<int, int>, std::string>& errorPages)
+void Client::chargeStatusData(std::map<std::pair<int, int>, std::string>& errorPages)
 {
-	std::map<std::pair<int, int>, std::string>::const_iterator it = errorPages.begin();
-	std::map<std::pair<int, int>, std::string>::const_iterator end = errorPages.end();
+    std::map<std::pair<int, int>, std::string>::const_iterator it = errorPages.begin();
+    std::map<std::pair<int, int>, std::string>::const_iterator end = errorPages.end();
 
-	for (; it != end; ++it)
-	{
-		if (it->first.first != _status)
-			continue;
-		if (it->first.first != it->first.second)
-			_status = it->first.second;
-		_headerContent.path = it->second;
-		std::string target = it->second;
-		while (!target.empty() && (target[0] == ' ' || target[0] == '\t'))
-			target.erase(0, 1);
-		while (!target.empty() && (target[target.size() - 1] == ' ' || target[target.size() - 1] == '\t'))
-			target.erase(target.size() - 1);
-		// EXTERNAL URL
-		if (target.size() >= 7 && (target.substr(0, 7) == "http://" || (target.size() >= 8 && target.substr(0, 8) == "https://")))
-		{
-			_redirectLocation = target;
-			_hasErrorPageResolved = true;
-			return;
-		}
-		// Local URI or relative path -> resolve to filesystem path using location or server root
-		std::string root = _listener.getConfig().root;
-		if (_isLocation)
-			root = _location.root;
-		std::string resolved;
-		if (!target.empty() && target[0] == '/')
-		{
-			// target is a URI path relative to server/location root
-			// avoid duplicating slashes
-			if (root.size() > 0 && root[root.size() - 1] == '/')
-				resolved = root + (target.size() > 1 ? target.substr(1) : std::string());
-			else
-				resolved = root + target;
-		}
-		else
-		{
-			// treat as relative to root
-			if (root.size() > 0 && root[root.size() - 1] == '/')
-				resolved = root + target;
-			else
-				resolved = root + "/" + target;
-		}
-		// validate resolved path
-		if (!resolved.empty() && isWithinRoot(resolved, root) && access(resolved.c_str(), R_OK) == 0)
-		{
-			_errorResolvedPath = resolved;
-			_hasErrorPageResolved = true;
-			return;
-		}
-	}
+    for (; it != end; ++it)
+    {
+        if (it->first.first != _status)
+            continue;
+
+        std::cout << "*******************FIRST.FIRST: "
+                  << it->first.first << " | FIRST.SECOND: "
+                  << it->first.second << "***************" << std::endl;
+
+        std::string target = it->second;
+
+        // trim
+        while (!target.empty() && (target[0] == ' ' || target[0] == '\t'))
+            target.erase(0, 1);
+        while (!target.empty() && (target[target.size() - 1] == ' ' || target[target.size() - 1] == '\t'))
+            target.erase(target.size() - 1);
+
+        if (it->first.first != it->first.second)
+        {
+            _status = it->first.second;
+            _redirectLocation = target;
+            _hasErrorPageResolved = true;
+            return;
+        }
+
+        std::string root = _listener.getConfig().root;
+        if (_isLocation)
+            root = _location.root;
+
+        std::string resolved;
+
+        if (!target.empty() && target[0] == '/')
+        {
+            if (!root.empty() && root[root.size() - 1] == '/')
+                resolved = root + target.substr(1);
+            else
+                resolved = root + target;
+        }
+        else
+        {
+            if (!root.empty() && root[root.size() - 1] == '/')
+                resolved = root + target;
+            else
+                resolved = root + "/" + target;
+        }
+        if (!resolved.empty() && isWithinRoot(resolved, root) && access(resolved.c_str(), R_OK) == 0)
+        {
+            _errorResolvedPath = resolved;
+            _hasErrorPageResolved = true;
+            return;
+        }
+    }
 }
 
 std::string	Client::chargeDefaultErrorPage()
@@ -1707,7 +1838,7 @@ void	Client::sendResponse()
 	{
 		// If an error was already set before preparing response, send that error code
 		handleErrors();
-
+		std::cout << "||||||||||||||||||||||||||||||STATUS: " << _status << "||||||||||||||||||||" << std::endl;
 		// If chargeStatusData resolved an external redirect, send it immediately
 		if (_hasErrorPageResolved && !_redirectLocation.empty())
 		{
@@ -1903,6 +2034,7 @@ void	Client::sendResponse()
 		}
 
 		// Only set default 200 if status indicates success-range
+		//handleErrors();
 		if (!(_status >= 300 && _status < 600))
 		{
 			_status = 200;
