@@ -62,7 +62,7 @@ public:
 	void	setRoot(std::string& r, int n);
 	void	setServerName(std::string& sn);
 	void	setClientMaxBodySize(long cmbs, char c);
-	void	addErrorPage(std::pair<int, int> codes, std::string& uri);
+	void	addErrorPage(std::vector <std::pair<int, int> > codes, std::string& uri);
 	void	addLocation(LocationConfig& loc);
 	void	setAllowedMethods(const std::vector<std::string>& m);
 	void	setFd(int fd);

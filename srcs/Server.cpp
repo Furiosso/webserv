@@ -65,9 +65,10 @@ void	Server::setClientMaxBodySize(long cmbs, char c)
 	_config.client_max_body_size = cmbs;
 }
 
-void	Server::addErrorPage(std::pair<int, int> codes, std::string& uri)
+void	Server::addErrorPage(std::vector<std::pair<int, int> > codes, std::string& uri)
 {
-	_config.error_pages.insert(std::pair<std::pair<int, int>, std::string>(codes, uri));
+	for (size_t i = 0; i < codes.size(); i++)
+		_config.error_pages.insert(std::pair<std::pair<int, int>, std::string>(codes[i], uri));
 	_config.areErrorPages = true;
 }
 

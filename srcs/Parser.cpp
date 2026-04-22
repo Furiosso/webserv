@@ -435,7 +435,7 @@ void    Parser::errorpageParser(std::vector<std::string>::iterator& it, Server& 
 {
     int                                 pos;
     int                                 prev = 0;
-	std::pair<int, int> ovr;
+	std::vector<std::pair<int, int> >   ovr;
 
     ++it;
     while (*it != ";")
@@ -445,12 +445,12 @@ void    Parser::errorpageParser(std::vector<std::string>::iterator& it, Server& 
         if (prev == 0)
             throw std::runtime_error("Parser: configuration error");
 		if (prev == 1)
-        {
-			ovr.first = std::atoi(it->c_str());
-            ovr.second = std::atoi(it->c_str());
-        }
+			ovr.push_back(std::make_pair(std::atoi(it->c_str()), std::atoi(it->c_str())));
         if (prev == 2)
-			ovr.second = std::atoi(it->substr(1, it->length()).c_str());
+        {
+            for (size_t i = 0; i < ovr.size(); i++)
+			    ovr[i].second = std::atoi(it->substr(1, it->length()).c_str());
+        }
         ++it;
     }
     if (getTypeOfItem(*(it - 1)) != 3)
