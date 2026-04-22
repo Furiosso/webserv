@@ -8,7 +8,7 @@
 #include <strings.h>
 #include <sstream>
 
-Client::Client(Server& listener, int fd) : _listener(listener), _fd(fd), _status(200), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine(""), _isSent(false), _isLocation(false){
+Client::Client(Server& listener, int fd) : _listener(listener), _fd(fd), _status(200), _body(""), _isHeaderReady(false), _isBodyReady(false), _chunkLen(0), _chunkLine(""), _isSent(false), _isLocation(false) {
 	_headerContent.isChunked = false;
 	_headerContent.ContentLength = 0;
 	_headerContent.isAutoindexResponse = false;
@@ -1669,37 +1669,36 @@ void Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& 
     {
         if (it->first.first != _status)
             continue;
-
-        std::cout << "*******************FIRST.FIRST: "
-                  << it->first.first << " | FIRST.SECOND: "
-                  << it->first.second << "***************" << std::endl;
-
         std::string target = it->second;
-
-        // trim
         while (!target.empty() && (target[0] == ' ' || target[0] == '\t'))
             target.erase(0, 1);
         while (!target.empty() && (target[target.size() - 1] == ' ' || target[target.size() - 1] == '\t'))
             target.erase(target.size() - 1);
-
-        // 🔴 CASO 1: =code → REDIRECT (externo o interno)
         if (it->first.first != it->first.second)
         {
+			bool isSelfRedirect = (target.find("http://localhost") == 0
+				|| target.find("http://127.0.0.1") == 0);
+    		if (isSelfRedirect)
+    		{
+        		// Extraer el path de la URL y comprobar si existe
+        		std::string path = target.substr(target.find('/', 7)); // quita "http://host"
+        		std::string root = _listener.getConfig().root;
+        		std::string resolved = root + path;
+        		if (access(resolved.c_str(), R_OK) != 0)
+        		{
+            	// El fichero no existe → no redirigir, dejar que se sirva error genérico
+            		return ;
+        		}
+    		}
             _status = it->first.second;
             _redirectLocation = target;
             _hasErrorPageResolved = true;
             return;
         }
-
-        // 🔵 CASO 2: SIN =code → servir fichero (internal error page)
-
-        // NO tocar path global directamente aún
         std::string root = _listener.getConfig().root;
         if (_isLocation)
             root = _location.root;
-
         std::string resolved;
-
         if (!target.empty() && target[0] == '/')
         {
             if (!root.empty() && root[root.size() - 1] == '/')
@@ -1720,10 +1719,8 @@ void Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& 
         {
             _errorResolvedPath = resolved;
             _hasErrorPageResolved = true;
-            return;
+            return ;
         }
-
-        // si falla, no hacemos nada → caerá en default error page
     }
 }
 
@@ -1736,33 +1733,36 @@ void Client::chargeStatusData(std::map<std::pair<int, int>, std::string>& errorP
     {
         if (it->first.first != _status)
             continue;
-
-        std::cout << "*******************FIRST.FIRST: "
-                  << it->first.first << " | FIRST.SECOND: "
-                  << it->first.second << "***************" << std::endl;
-
         std::string target = it->second;
-
-        // trim
         while (!target.empty() && (target[0] == ' ' || target[0] == '\t'))
             target.erase(0, 1);
         while (!target.empty() && (target[target.size() - 1] == ' ' || target[target.size() - 1] == '\t'))
             target.erase(target.size() - 1);
-
         if (it->first.first != it->first.second)
         {
+			bool isSelfRedirect = (target.find("http://localhost") == 0
+				|| target.find("http://127.0.0.1") == 0);
+    		if (isSelfRedirect)
+    		{
+        		// Extraer el path de la URL y comprobar si existe
+        		std::string path = target.substr(target.find('/', 7)); // quita "http://host"
+        		std::string root = _listener.getConfig().root;
+        		std::string resolved = root + path;
+        		if (access(resolved.c_str(), R_OK) != 0)
+        		{
+            	// El fichero no existe → no redirigir, dejar que se sirva error genérico
+            		return ;
+        		}
+    		}
             _status = it->first.second;
             _redirectLocation = target;
             _hasErrorPageResolved = true;
             return;
         }
-
         std::string root = _listener.getConfig().root;
         if (_isLocation)
             root = _location.root;
-
         std::string resolved;
-
         if (!target.empty() && target[0] == '/')
         {
             if (!root.empty() && root[root.size() - 1] == '/')
