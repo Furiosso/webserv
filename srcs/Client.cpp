@@ -418,7 +418,7 @@ static bool setNonBlocking(int fd)
 /* Build a new envp (char*[] terminated by NULL) by merging parent_env and
    extra variables (extras). The returned envp is allocated with new[] and
    each string with new[]. Caller must free with freeEnvp(). */
-/*static char **buildEnvpFromMapAndParent(const std::map<std::string, std::string>& extras, char **parent_env)
+static char **buildEnvpFromMapAndParent(const std::map<std::string, std::string>& extras, char **parent_env)
 {
 	std::map<std::string, std::string> merged;
 	if (parent_env)
@@ -455,7 +455,7 @@ static void freeEnvp(char **envp)
 	for (char **p = envp; *p != NULL; ++p)
 		delete [] *p;
 	delete [] envp;
-}*/
+}
 
 bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter)
 {
@@ -517,95 +517,6 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 			changedCwd = true;
 		}
 
-		/* Build argv dynamically. If interpreter looks like Python, request unbuffered mode. 
-		std::vector<char*> argv_vec;
-		bool python_unbuffered = false;
-		if (!interpreter.empty())
-		{
-			argv_vec.push_back(const_cast<char*>(interpreter.c_str()));
-			std::string li = interpreter;
-			if (li.find("python") != std::string::npos)
-			{
-				// request unbuffered python to avoid stdout buffering delaying the response
-				argv_vec.push_back(const_cast<char*>("-u"));
-				python_unbuffered = true;
-			}
-			argv_vec.push_back(const_cast<char*>(scriptPath.c_str()));
-		}
-		else
-		{
-			argv_vec.push_back(const_cast<char*>(scriptPath.c_str()));
-		}
-		argv_vec.push_back(NULL);
-		char **argv_exec = new char*[argv_vec.size()];
-		for (size_t ai = 0; ai < argv_vec.size(); ++ai) argv_exec[ai] = argv_vec[ai];
-
-		 //Build richer CGI env from available request data and inherit parent's env
-		std::map<std::string,std::string> extras;
-		extras["REQUEST_METHOD"] = _headerContent.method;
-		extras["SERVER_PROTOCOL"] = _headerContent.protocol;
-		if (_headerContent.ContentLength > 0)
-		{
-			std::ostringstream __tmp_ss;
-			__tmp_ss << _headerContent.ContentLength;
-			extras["CONTENT_LENGTH"] = __tmp_ss.str();
-		}
-		if (!this->_headerContent.host.empty())
-			extras["SERVER_NAME"] = this->_headerContent.host;
-		// SCRIPT_FILENAME = filesystem path to script
-		extras["SCRIPT_FILENAME"] = scriptPath;
-		// Try to obtain original request URI (path + optional ?query)
-		std::string request_uri;
-		if (!this->_request[0].empty())
-		{
-			// request line stored as: "GET /path?query HTTP/1.1"
-			std::istringstream rs(this->_request[0]);
-			std::string method_token, uri_token, proto_token;
-			rs >> method_token >> uri_token >> proto_token;
-			request_uri = uri_token;
-		}
-		if (request_uri.empty())
-		{
-			// fallback: try to reconstruct from headerContent.path (may be filesystem path)
-			request_uri = _headerContent.path;
-		}
-		// split QUERY_STRING if present
-		size_t qpos = request_uri.find('?');
-		if (qpos != std::string::npos)
-		{
-			extras["SCRIPT_NAME"] = request_uri.substr(0, qpos);
-			extras["QUERY_STRING"] = request_uri.substr(qpos + 1);
-		}
-		else
-		{
-			extras["SCRIPT_NAME"] = request_uri;
-			extras["QUERY_STRING"] = std::string();
-		}
-		extras["REQUEST_URI"] = request_uri;
-		// DOCUMENT_ROOT: prefer location root if available
-		if (_isLocation)
-			extras["DOCUMENT_ROOT"] = _location.root;
-		else
-			extras["DOCUMENT_ROOT"] = _listener.getConfig().root;
-		// Standard CGI vars
-		extras["GATEWAY_INTERFACE"] = "CGI/1.1";
-		extras["SERVER_SOFTWARE"] = "webserv/0.1";
-
-		// If python, set PYTHONUNBUFFERED in the child env too
-		if (python_unbuffered)
-			extras["PYTHONUNBUFFERED"] = "1";
-
-		char **child_envp = buildEnvpFromMapAndParent(extras, env);
-
-		std::cerr << "child: execve with argv[0]=" << argv_exec[0] << "\n";
-		execve(argv_exec[0], argv_exec, child_envp);
-
-		// execve failed 
-		int savedErrno = errno;
-		std::cerr << "child: execve failed: errno=" << savedErrno << " (" << strerror(savedErrno) << ")\n";
-		freeEnvp(child_envp);
-		delete [] argv_exec;*/
-		// Build argv safely into owned strings so c_str() pointers remain valid
 		std::vector<std::string> argv_store;
 		if (!interpreter.empty())
 		{
@@ -640,13 +551,79 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		for (size_t ai = 0; ai < argc + 1; ++ai)
 			std::cerr << " '" << (argv_exec[ai] ? argv_exec[ai] : (char*)"(null)") << "'";
 		std::cerr << std::endl;
-		// Attempt to execute interpreter; on failure, print errno reason to stderr
-		execve(argv_exec[0], argv_exec, env);
+		// Build richer CGI env from available request data and inherit parent's env
+		std::map<std::string,std::string> extras;
+		extras["REQUEST_METHOD"] = _headerContent.method;
+		extras["SERVER_PROTOCOL"] = _headerContent.protocol;
+		if (_headerContent.ContentLength > 0)
+		{
+			std::ostringstream __tmp_ss;
+			__tmp_ss << _headerContent.ContentLength;
+			extras["CONTENT_LENGTH"] = __tmp_ss.str();
+		}
+		else if (_headerContent.method == "POST")
+		{
+			// fallback: use currently buffered body size if no Content-Length set
+			std::ostringstream __tmp_ss;
+			__tmp_ss << _body.size();
+			extras["CONTENT_LENGTH"] = __tmp_ss.str();
+		}
+		if (!this->_headerContent.host.empty())
+			extras["SERVER_NAME"] = this->_headerContent.host;
+		// SCRIPT_FILENAME = filesystem path to script
+		extras["SCRIPT_FILENAME"] = scriptPath;
+		// Try to obtain original request URI (path + optional ?query)
+		std::string request_uri;
+		if (!this->_request[0].empty())
+		{
+			std::istringstream rs(this->_request[0]);
+			std::string method_token, uri_token, proto_token;
+			rs >> method_token >> uri_token >> proto_token;
+			request_uri = uri_token;
+		}
+		if (request_uri.empty())
+		{
+			request_uri = _headerContent.path;
+		}
+		size_t qpos = request_uri.find('?');
+		if (qpos != std::string::npos)
+		{
+			extras["SCRIPT_NAME"] = request_uri.substr(0, qpos);
+			extras["QUERY_STRING"] = request_uri.substr(qpos + 1);
+		}
+		else
+		{
+			extras["SCRIPT_NAME"] = request_uri;
+			extras["QUERY_STRING"] = std::string();
+		}
+		extras["REQUEST_URI"] = request_uri;
+		if (_isLocation)
+			extras["DOCUMENT_ROOT"] = _location.root;
+		else
+			extras["DOCUMENT_ROOT"] = _listener.getConfig().root;
+		extras["GATEWAY_INTERFACE"] = "CGI/1.1";
+		extras["SERVER_SOFTWARE"] = "webserv/0.1";
+
+		// If python, set PYTHONUNBUFFERED in the child env too
+		// detect Python unbuffered flag request from argv_store
+		for (size_t ai = 0; ai < argc; ++ai)
+		{
+			std::string li = argv_store[ai];
+			if (li.find("python") != std::string::npos)
+			{
+				extras["PYTHONUNBUFFERED"] = "1";
+				break;
+			}
+		}
+
+		char **child_envp = buildEnvpFromMapAndParent(extras, env);
+
+		// Attempt to execute interpreter; pass constructed env
+		execve(argv_exec[0], argv_exec, child_envp);
 		int savedErrno = errno;
 		std::cerr << "execve failed: errno=" << savedErrno << " (" << strerror(savedErrno) << ")\n";
-		/*std::cerr << "child: execve failed: errno=" << savedErrno << " (" << strerror(savedErrno) << ")\n";
 		freeEnvp(child_envp);
-		delete [] argv_exec;*/
+		delete [] argv_exec;
 		// Ensure child exits without flushing stdio buffers from parent state
 		_exit(127);
 	}
@@ -658,16 +635,67 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		_cgi.in_fd = inpipe[1];
 		_cgi.out_fd = outpipe[0];
 		_cgi.write_buf = this->_body;
+		if (_headerContent.ContentLength != 0 && _cgi.write_buf.size() > _headerContent.ContentLength)
+			_cgi.write_buf = _cgi.write_buf.substr(0, _headerContent.ContentLength);
+		this->_body.clear();
+		this->_isBodyReady = false;
 		std::cout << "BODY EN CGI" <<_body << std::endl;
 		_cgi.write_pos = 0;
 		_cgi.read_buf.clear();
-		// Clear any previous CGI content-type
 		_cgiContentType.clear();
 		_cgi.in_closed = false;
 		_cgi.out_closed = false;
 		_cgi.finalized = false;
-		setNonBlocking(_cgi.in_fd);
 		setNonBlocking(_cgi.out_fd);
+		// Try to write any buffered request body to the CGI stdin immediately
+		// (non-blocking). This avoids the child printing a complete response
+		// and the parent finalizing before the stdin body has been delivered,
+		// which would cause the CGI to block waiting for stdin.
+		if (!_cgi.write_buf.empty() && _cgi.in_fd >= 0)
+		{
+			while (_cgi.write_pos < _cgi.write_buf.size())
+			{
+				const char* buf = _cgi.write_buf.c_str() + _cgi.write_pos;
+				size_t to_write = _cgi.write_buf.size() - _cgi.write_pos;
+				ssize_t w = ::write(_cgi.in_fd, buf, to_write);
+				if (w > 0)
+					_cgi.write_pos += (size_t)w;
+				else
+				{
+					if (errno == EAGAIN || errno == EWOULDBLOCK)
+						break; // try later via POLLOUT (only occurs if fd was set non-blocking elsewhere)
+					// fatal write error: close and mark closed
+					close(_cgi.in_fd);
+					_cgi.in_fd = -1;
+					_cgi.in_closed = true;
+					break;
+				}
+			}
+			if (_cgi.write_pos >= _cgi.write_buf.size() && _cgi.in_fd >= 0)
+			{
+				close(_cgi.in_fd);
+				_cgi.in_fd = -1;
+				_cgi.in_closed = true;
+			}
+			// Debug: report how many bytes we managed to write to CGI stdin and
+			// show a short hex preview so we can verify binary data delivery.
+			std::cerr << "startCgiNonBlocking (parent): wrote " << _cgi.write_pos << " of " << _cgi.write_buf.size() << " bytes to CGI stdin\n";
+			if (!_cgi.write_buf.empty())
+			{
+				size_t preview = std::min<size_t>(_cgi.write_buf.size(), (size_t)32);
+				std::ostringstream hexs;
+				hexs<< std::hex << std::setfill('0');
+				for (size_t i = 0; i < preview; ++i)
+					hexs << std::setw(2) << (static_cast<unsigned int>(static_cast<unsigned char>(_cgi.write_buf[i])) & 0xff) << " ";
+				std::cerr << "startCgiNonBlocking (parent): data preview (hex): " << hexs.str() << "\n";
+			}
+			// If the write end is still open (partial write), set it non-blocking
+			// so future POLLOUT events can continue sending data without blocking.
+			if (_cgi.in_fd >= 0)
+			{
+				setNonBlocking(_cgi.in_fd);
+			}
+		}
 		// If there's no data to send to CGI stdin (common for GET/HEAD), close
 		// the write end in the parent to signal EOF to the child immediately.
 		// This prevents scripts that read from stdin from blocking.
@@ -678,7 +706,6 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 			_cgi.in_closed = true;
 		}
 		std::cerr << "startCgiNonBlocking (parent): pid=" << pid << " in_fd=" << _cgi.in_fd << " out_fd=" << _cgi.out_fd << " write_buf_size=" << _cgi.write_buf.size() << " in_closed=" << _cgi.in_closed << "\n";
-		//_isSent = true;
 		return true;
 	}
 	return false;
@@ -955,6 +982,11 @@ bool	Client::handleCgiIfNeeded()
 	std::string ext = getExtension(this->_headerContent.path);
 	if (cgiMap.count(ext))
 	{
+		if (this->_headerContent.method == "POST" && !this->_isBodyReady)
+		{
+			std::cerr << "handleCgiIfNeeded: POST body not ready, deferring CGI start\n";
+			return false;
+		}
 		std::string interp = cgiMap[ext];
 		if (!startCgiNonBlocking(this->_headerContent.path, interp))
 		{
@@ -1903,18 +1935,40 @@ void	Client::sendResponse()
 			else
 				cgiMap = _listener.getConfig().cgi; //location.cgi
 			if (cgiMap.count(ext))
-    		{
-    		    if (!isCgiRunning())
+			{
+				// If the CGI already produced a body for this request, send it
+				// directly to the client instead of starting a new CGI process
+				// or writing it to disk.
+				if (this->_isBodyReady)
 				{
-					if (!startCgiNonBlocking(this->_headerContent.path, cgiMap[ext]))
-					{
-						this->_status = 500;
-						return;
-					}
+					// Build response headers using CGI-provided status and content-type
+					int respStatus = this->_status;
+					std::string contentType = _cgiContentType.empty() ? "text/plain" : _cgiContentType;
+					std::ostringstream hs;
+					hs << this->_headerContent.protocol << " " << respStatus << " " << reasonPhrase(respStatus) << "\r\n";
+					hs << "Connection: close\r\n";
+					hs << "Content-Type: " << contentType << "\r\n";
+					hs << "Content-Length: " << this->_body.size() << "\r\n\r\n";
+					_sendBuffer += hs.str();
+					_sendBuffer += this->_body;
+					_isSent = true;
+					flushResponse();
+					return;
 				}
-    		    // response will be produced when CGI finishes (finalizeCgiIfDone)
-    		    return;
-    		}
+				else
+				{
+					if (!isCgiRunning())
+					{
+						if (!startCgiNonBlocking(this->_headerContent.path, cgiMap[ext]))
+						{
+							this->_status = 500;
+							return;
+						}
+					}
+					// response will be produced when CGI finishes (finalizeCgiIfDone)
+					return;
+				}
+			}
 			int	fd = open(this->_headerContent.path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
 			if (fd < 0)
 			{
