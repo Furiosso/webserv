@@ -1,6 +1,6 @@
 #include "Server.hpp"
 
-Server::Server()
+Server::Server() : _fd(-1)
 {
 	//_config.listen.insert(std::pair<std::string, std::string>("127.0.0.1", "80"));
 	//si a la hora de transmitir la informacion a getaddrinfo listen.size es igual a 0 intorducir en ese momento los valores por defecto
@@ -54,7 +54,7 @@ void	Server::setServerName(std::string& sn)
 	_config.server_name = sn;
 }
 
-void	Server::setClientMaxBodySize(long cmbs, char c)
+void	Server::setClientMaxBodySize(long long cmbs, char c)
 {
 	if (c == 'K' || c == 'k')
 		cmbs *= 1024;

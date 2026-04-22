@@ -46,6 +46,10 @@ Client::~Client()
 			// child still running: try kill
 			kill(_cgi.pid, SIGKILL);
 			waitpid(_cgi.pid, &status, 0);
+			/*5. Destructor — waitpid bloqueante como fallback
+			kill(_cgi.pid, SIGKILL);
+			waitpid(_cgi.pid, &status, 0); // ← bloquea
+			Si el proceso hijo no muere inmediatamente tras SIGKILL (raro pero posible en Linux con procesos en estado D), esto bloquea el servidor entero. Para webserv de 42 suele pasar el evaluador, pero es un riesgo real.*/
 		}
 		_cgi.pid = -1;
 	}
@@ -55,6 +59,8 @@ void Client::setEnv(char **envp)
 {
 	// store pointer only; do not allocate or free memory
 	env = envp;
+	/*5. setEnv almacena puntero sin ownership claro
+	El comentario dice "do not allocate or free", lo cual está bien — pero si el env original (el char** env del main) se invalida antes de que el Client lo use en CGI, tienes un puntero colgante. Para webserv donde env viene del main y vive todo el programa está bien, pero documéntalo.*/
 }
 
 void Client::setListener(const Server& s) { this->_listener = s; }
@@ -65,6 +71,18 @@ Server	Client::getListener() const { return _listener; }
 
 std::string Client::generateDirectoryListing(const std::string& dirPath, const std::string& requestPath)
 {
+	/*1. generateDirectoryListing — XSS / path injection
+	requestPath se inserta directamente en el HTML sin escapar:
+	html += "<h1>Index of " + requestPath + "</h1>";
+	html += "<a href=\"" + href + name + "\">" + name + "</a>";
+	Si requestPath o name contiene <, >, o ", el HTML se rompe. Para 42 no suelen penalizarlo, pero si el evaluador prueba una URL como /dir/<script> puede causar problemas. Crea una función htmlEscape mínima.
+	2. generateDirectoryListing — name se modifica pero href usa el original
+	std::string name = names[i];  // ← copia original
+	// ...
+	if (S_ISDIR(s.st_mode))
+    	name += "/";              // ← añade / al nombre mostrado
+	html += "<a href=\"" + href + name + "\">" + name + "</a>";  // ← href usa name ya modificado ✓
+	Esto está bien en realidad — el / se añade antes de construir el href. Pero es confuso porque name cumple dos roles (nombre mostrado y parte del href). Mejor usar una variable separada displayName.*/
 	try {
 		DIR* dir = opendir(dirPath.c_str());
 		if (!dir)
@@ -96,6 +114,8 @@ std::string Client::generateDirectoryListing(const std::string& dirPath, const s
 			if (stat(fullPath.c_str(), &s) == 0)
 				if (S_ISDIR(s.st_mode))
 					name += "/";
+			/*3. stat falla silenciosamente
+			Si stat falla (permisos, symlink roto, etc.), name no recibe el / pero tampoco se informa del error. El directorio aparece listado como fichero normal. Aceptable para 42, pero vale la pena un continue o log.*/
 			html += "<a href=\"" + href + name + "\">" + name + "</a>\n";
 		}
 		html += "</pre><hr></body></html>";
@@ -105,7 +125,8 @@ std::string Client::generateDirectoryListing(const std::string& dirPath, const s
 		return std::string();
 	}
 }
-
+/*4. setClientFd probablemente no se usa
+Tienes _fd que se setea en el constructor. Si setClientFd no se llama en ningún sitio, elimínala — es superficie de error innecesaria.*/
 void Client::setClientFd(int fd) { this->_fd = fd; }
 
 int Client::getClientFd() const { return this->_fd; }
@@ -116,23 +137,28 @@ bool Client::getIsBodyReady() const { return this->_isBodyReady; }
 
 static std::string getMimeType(const std::string& path)
 {
-	if (path.size() >= 5 && path.substr(path.size() - 4) == ".jpg") return "image/jpeg";
-	if (path.size() >= 6 && path.substr(path.size() - 5) == ".jpeg") return "image/jpeg";
-	if (path.size() >= 5 && path.substr(path.size() - 4) == ".png") return "image/png";
-	if (path.size() >= 5 && path.substr(path.size() - 4) == ".gif") return "image/gif";
-	if (path.size() >= 5 && path.substr(path.size() - 4) == ".svg") return "image/svg+xml";
-	if (path.size() >= 6 && path.substr(path.size() - 5) == ".html") return "text/html";
-	if (path.size() >= 5 && path.substr(path.size() - 4) == ".htm") return "text/html";
-	if (path.size() >= 5 && path.substr(path.size() - 4) == ".txt") return "text/plain";
-	if (path.size() >= 6 && path.substr(path.size() - 5) == ".json") return "application/json";
-	if (path.size() >= 5 && path.substr(path.size() - 4) == ".xml") return "application/xml";
-	if (path.size() >= 5 && path.substr(path.size() - 4) == ".css") return "text/css";
-	if (path.size() >= 4 && path.substr(path.size() - 3) == ".js") return "application/javascript";
+	/*3. getMimeType — substr en cada comparación es ineficiente
+	Para cada llamada creas un std::string temporal por cada extensión que no coincide. Usa rfind o compara con std::string::compare desde el final. Para webserv no es un problema de rendimiento real, pero es un detalle que un evaluador podría mencionar.*/
+	if (path.size() >= 4 && path.substr(path.size() - 4) == ".jpg") return "image/jpeg";
+	if (path.size() >= 5 && path.substr(path.size() - 5) == ".jpeg") return "image/jpeg";
+	if (path.size() >= 4 && path.substr(path.size() - 4) == ".png") return "image/png";
+	if (path.size() >= 4 && path.substr(path.size() - 4) == ".gif") return "image/gif";
+	if (path.size() >= 4 && path.substr(path.size() - 4) == ".svg") return "image/svg+xml";
+	if (path.size() >= 5 && path.substr(path.size() - 5) == ".html") return "text/html";
+	if (path.size() >= 4 && path.substr(path.size() - 4) == ".htm") return "text/html";
+	if (path.size() >= 4 && path.substr(path.size() - 4) == ".txt") return "text/plain";
+	if (path.size() >= 5 && path.substr(path.size() - 5) == ".json") return "application/json";
+	if (path.size() >= 4 && path.substr(path.size() - 4) == ".xml") return "application/xml";
+	if (path.size() >= 4 && path.substr(path.size() - 4) == ".css") return "text/css";
+	if (path.size() >= 3 && path.substr(path.size() - 3) == ".js") return "application/javascript";
+	if (path.size() >= 4 && path.substr(path.size() - 4) == ".pdf") return "application/pdf";
 	return "application/octet-stream";
 }
 
 static const char* reasonPhrase(int code)
 {
+	/*5. reasonPhrase podría ser inline o estar en un header de utils
+	Es una función estática en Client.cpp, pero reasonPhrase es utilidad genérica HTTP. Si en algún momento necesitas usarla desde otro .cpp tendrás que duplicarla. Para 42 está bien donde está.*/
 	switch (code)
 	{
 		/* 1xx Informational */
@@ -224,6 +250,12 @@ static int hexVal(char c)
 
 static std::string urlDecode(const std::string& s)
 {
+	/*1. urlDecode no rechaza secuencias peligrosas
+	Decodifica %2F → / sin restricciones. Eso significa que una URL como /files%2F..%2F..%2Fetc%2Fpasswd se convierte en /files/../../../etc/passwd antes de que tu código compruebe el path. Si isWithinRoot se aplica después de decodificar, está cubierto — pero si se aplica antes, tienes un path traversal.
+	Asegúrate de que el flujo sea siempre:
+	urlDecode → normalizar path → isWithinRoot → acceder al fichero
+	Y nunca al revés.
+	Todo lo demás está correcto — el manejo de % incompletos (cuando i + 2 < s.size() falla, pasa el % literal), los valores hex con mayúsculas y minúsculas, y el reserve para evitar reallocaciones. Buen código.*/
 	std::string out;
 	out.reserve(s.size());
 	for (size_t i = 0; i < s.size(); ++i)
@@ -248,6 +280,11 @@ static std::string urlDecode(const std::string& s)
 // Return directory part of a filesystem path, or empty if none.
 static std::string getDirectory(const std::string& path)
 {
+	/*1. Eliminar ./ al principio puede cambiar el path de forma incorrecta
+	Si el path es ./foo/bar.txt, eliminas el ./ y te queda foo/bar.txt, cuyo directorio es foo — correcto. Pero si el path es ././foo, eliminas dos veces y también funciona. El problema es que si el path es ./../foo, solo eliminas el primer ./ y te queda ../foo, que es un path relativo que sube un nivel. Si esta función se usa antes de isWithinRoot, ese .. puede ser peligroso. Comprueba que el path ya esté normalizado y sin .. antes de llamarla.
+	2. No maneja // ni paths con .. en el medio
+	/foo/../bar devuelve /foo/.., no /bar. Nuevamente, si los paths ya vienen normalizados desde antes no es un problema, pero la función no lo documenta como precondición.
+	3. El nombre getDirectory es genérico — en el estándar C++ esto es equivalente a dirname. Si en algún momento incluyes <libgen.h> en otro fichero podrías tener conflicto de nombres al ser static. No es un problema real pero vale la pena el comentario.*/
 	if (path.empty()) return std::string();
 	// Remove leading "./" segments which indicate current directory
 	std::string p = path;
@@ -272,7 +309,11 @@ void Client::	chargeHeader()
 	}
 	else if (bytesRead == 0)
 	{
-		// cliente cerró la conexión: puede significar EOF after body
+		this->_status = 400;
+    	this->_isHeaderReady = true;
+    	this->_isBodyReady = true;
+    	return;
+		/*// cliente cerró la conexión: puede significar EOF after body
 		if (this->_headerContent.method == "POST")
 		{
 			// If Content-Length was set and we've already read enough, mark body ready
@@ -302,7 +343,7 @@ void Client::	chargeHeader()
 		}
 		// For non-POST methods: mark as closed so main will cleanup
 		this->_status = 200;
-		return;
+		return;*/
 	}
 	else
 	{
@@ -1503,77 +1544,77 @@ void	Client::chunkManagement() //corregir esto
 	}
 }
 
-void	Client::chargeBody()
-{
-	if (this->_headerContent.method != "POST")
-		return ;
-	//std::cout << "ENTER chargeBody fd=" << this->_fd << " path=" << this->_headerContent.path << "\n";
-	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer), 0); // sustituir el tamaño del buffer a una macro
-	//std::cout << "chargeBody: recv returned " << bytesRead << " on fd=" << this->_fd << "\n";
-	if (bytesRead < 0)
+	void	Client::chargeBody()
 	{
-		// Non-blocking sockets will often return EAGAIN/EWOULDBLOCK when there's no data yet.
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
-			return;
-		std::cerr << "Error reading from socket (fd " << this->_fd << "): " << strerror(errno) << std::endl;
-		return;
-	}
-	else if (bytesRead == 0)
-	{
-		// cliente cerró la conexión: if we already have the expected body length,
-		// mark body ready. Otherwise treat as premature EOF and set an error.
-		if (!this->_headerContent.isChunked)
+		if (this->_headerContent.method != "POST")
+			return ;
+		//std::cout << "ENTER chargeBody fd=" << this->_fd << " path=" << this->_headerContent.path << "\n";
+		ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer), 0); // sustituir el tamaño del buffer a una macro
+		//std::cout << "chargeBody: recv returned " << bytesRead << " on fd=" << this->_fd << "\n";
+		if (bytesRead < 0)
 		{
-			if (this->_headerContent.ContentLength != 0)
+			// Non-blocking sockets will often return EAGAIN/EWOULDBLOCK when there's no data yet.
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				return;
+			std::cerr << "Error reading from socket (fd " << this->_fd << "): " << strerror(errno) << std::endl;
+			return;
+		}
+		else if (bytesRead == 0)
+		{
+			// cliente cerró la conexión: if we already have the expected body length,
+			// mark body ready. Otherwise treat as premature EOF and set an error.
+			if (!this->_headerContent.isChunked)
 			{
-				if (this->_body.size() >= this->_headerContent.ContentLength)
+				if (this->_headerContent.ContentLength != 0)
 				{
-					if (this->_body.size() > this->_headerContent.ContentLength)
-						this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
+					if (this->_body.size() >= this->_headerContent.ContentLength)
+					{
+						if (this->_body.size() > this->_headerContent.ContentLength)
+							this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
+						this->_isBodyReady = true;
+						this->_request[1] = this->_body;
+						return;
+					}
+					// premature EOF
+					this->_status = 400;
+					return;
+				}
+				else
+				{
+					// No Content-Length and connection closed -> accept current body
 					this->_isBodyReady = true;
 					this->_request[1] = this->_body;
 					return;
 				}
-				// premature EOF
-				this->_status = 400;
-				return;
 			}
-			else
+			// For chunked transfer, rely on chunkManagement to set _isBodyReady; treat this as error
+			this->_status = 400;
+			return;
+		}
+		else
+		{
+		// Append raw bytes (binary-safe)
+			if (this->_headerContent.isChunked == true)
 			{
-				// No Content-Length and connection closed -> accept current body
+				// For chunked mode, append the newly-received bytes into the chunkLine
+				this->_chunkLine.append(this->_buffer, bytesRead);
+				chunkManagement();
+				ft_bzero(this->_buffer, sizeof(this->_buffer));
+				return ;
+			}
+		this->_body.append(this->_buffer, bytesRead); // Append raw bytes
+		std::cerr << "chargeBody: fd=" << this->_fd << " recv=" << bytesRead << " total_body=" << this->_body.size() << " target=" << this->_headerContent.ContentLength << "\n";
+			if (this->_headerContent.ContentLength <= this->_body.size())
+			{
+				if (this->_body.size() > this->_headerContent.ContentLength)
+					this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
 				this->_isBodyReady = true;
 				this->_request[1] = this->_body;
-				return;
+				std::cout << "CHARGE BODY: body ready, size=" << this->_body.size() << "\n";
 			}
-		}
-		// For chunked transfer, rely on chunkManagement to set _isBodyReady; treat this as error
-		this->_status = 400;
-		return;
-	}
-	else
-	{
-	// Append raw bytes (binary-safe)
-		if (this->_headerContent.isChunked == true)
-		{
-			// For chunked mode, append the newly-received bytes into the chunkLine
-			this->_chunkLine.append(this->_buffer, bytesRead);
-			chunkManagement();
 			ft_bzero(this->_buffer, sizeof(this->_buffer));
-			return ;
 		}
-	this->_body.append(this->_buffer, bytesRead); // Append raw bytes
-	std::cerr << "chargeBody: fd=" << this->_fd << " recv=" << bytesRead << " total_body=" << this->_body.size() << " target=" << this->_headerContent.ContentLength << "\n";
-		if (this->_headerContent.ContentLength <= this->_body.size())
-		{
-			if (this->_body.size() > this->_headerContent.ContentLength)
-				this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
-			this->_isBodyReady = true;
-			this->_request[1] = this->_body;
-			std::cout << "CHARGE BODY: body ready, size=" << this->_body.size() << "\n";
-		}
-		ft_bzero(this->_buffer, sizeof(this->_buffer));
 	}
-}
 
 void	Client::flushResponse()
 {

@@ -96,8 +96,7 @@ class Parser
     private:
         std::string                             _config_file;
         std::vector<std::string>                _tokens;
-        std::multimap<std::string, std::string> _listens;
-        std::vector<int>                        _lflags;
+        std::multimap<std::string, std::string> _listens; // comprobar si podría ser un simple pair en vez de un mapa
         int                                     _serverCounter;
 		std::ifstream							_infile;
         void                                    listenParser(std::vector<std::string>::iterator& it, Server& server); //done

@@ -61,7 +61,7 @@ public:
 	void	setAutoindex(bool aI);
 	void	setRoot(std::string& r, int n);
 	void	setServerName(std::string& sn);
-	void	setClientMaxBodySize(long cmbs, char c);
+	void	setClientMaxBodySize(long long cmbs, char c);
 	void	addErrorPage(std::vector <std::pair<int, int> > codes, std::string& uri);
 	void	addLocation(LocationConfig& loc);
 	void	setAllowedMethods(const std::vector<std::string>& m);
@@ -69,7 +69,6 @@ public:
 	int		getFd() const;
 
 	const ServerConfig&	getConfig() const;
-	//volver a la version anterior en el que devuelve una referencia constante y el método es constante una vez esté correctamente configurada el método charge status data en la clase Client
 };
 
 #endif

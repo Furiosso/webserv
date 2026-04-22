@@ -61,6 +61,8 @@ private:
 	bool					_hasErrorPageResolved; // true if an error page (or redirect) was resolved
 public:
 	char	**env;
+	/*6. env público
+	char** env es público y se setea desde fuera con setEnv. Cualquier parte del código puede modificarlo accidentalmente. Debería ser privado con solo el setter público.*/
 	void	setEnv(char **envp);
 	Client(Server& listener, int fd);
 	~Client();
@@ -101,5 +103,7 @@ public:
 
 };
 
-
+/*8. Demasiadas responsabilidades en Client
+Client parsea HTTP, gestiona CGI, sirve ficheros, genera directory listing, maneja errores y envía respuestas. Para 42 es habitual, pero si hay bugs es difícil aislarlos. Mencionarlo para la evaluación.
+Pasa el siguiente método cuando quieras.*/
 #endif

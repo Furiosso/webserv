@@ -25,6 +25,10 @@ class ServerSocket
         //int                 _fd;
         std::vector<int>                                _listeners;
         std::vector<struct pollfd>                      _pollfds;
+        /*
+        4. _pollfds en ServerSocket no se usa
+        En el main construís tu propio vector pollfds — el de ServerSocket se rellena pero nunca se consulta. Es código muerto. O lo usás o lo eliminás.
+        */
         std::set< std::pair<std::string, std::string> > _created; //ver utilidad (comprobacion de duplicados ip:port)
         //std::string         _host;
         //const char*         _port;
@@ -35,7 +39,6 @@ class ServerSocket
         ServerSocket();
        // ServerSocket(const char* port);
         ~ServerSocket();
-        int                                 get_fd();
         const std::vector<int>&             getListeners() const;
         bool                                isListener(int fd);
         bool                                createListeners(std::vector<Server>& servers);

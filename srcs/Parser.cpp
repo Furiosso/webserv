@@ -33,8 +33,9 @@ int    isConfigWord(std::string& token)
 int     Parser::chooseState(std::vector<std::string>& tokens)
 {
     int prev = 0;
-    int  is_serv;
-    int  is_loc;
+    int  is_serv = 0   ;
+    int  is_loc = 0;
+
     for (size_t i = 0; i < tokens.size(); i++)
     {
         int pos = 0;
@@ -304,7 +305,7 @@ void    Parser::clientmaxbodysizeParser(std::vector<std::string>::iterator& it,S
     parse << *it;
     parse >> n;
     parse >> c;
-    if (n < 0 || n > std::numeric_limits<int>::max())
+    if (n < 0 || static_cast<size_t>(n) > std::numeric_limits<size_t>::max())
         throw std::runtime_error("Parser: configuration error");
     server.setClientMaxBodySize(n, c);
 }
@@ -366,6 +367,12 @@ void	Parser::serverNameParser(std::vector<std::string>::iterator& it,Server& ser
 		str = *it;
 		prev = 0;
 
+        /*4. serverNameParser — lanza error si es una IP válida
+        if (!check_ipv4(str))
+        { valida como nombre }
+        else
+        throw std::runtime_error(...);
+        Esto impide usar una IP como server_name, lo cual es válido en nginx. Puede ser intencional, pero vale la pena comentarlo explícitamente.   */
 		if (!check_ipv4(str))
 		{
 			while (i < str.length())
@@ -528,6 +535,9 @@ void	Parser::indexParser(std::vector<std::string>::iterator& it,Server& server)
 
 int    isCgiWord(std::string& token)
 {
+    /*5. isCgiWord itera hasta 15 pero cgikeys solo tiene 4 elementos
+    cppfor (size_t i = 0; i < 15; i++)  // ← fuera de rango
+    cgikeys[4] — igual que isConfigWord itera hasta 15 pero configkeys[16] tiene 16 elementos, así que ese está bien. Cambia el límite de isCgiWord a 4.*/
     for (size_t i = 0; i < 15; i++)
     {
         if (token == cgikeys[i])
@@ -570,7 +580,7 @@ void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationCo
     if (*(it + 2) != ";")
         throw std::runtime_error("Parser: configuration error");
     ++it;
-    if (loc.isRoot == false || loc.isAlias == false)
+    if (loc.isRoot == false && loc.isAlias == false) // comprobar que esté bien
     {
 		loc.root = *it;
         if (i == 0)
@@ -719,7 +729,7 @@ void	Parser::cmbsLocParser(std::vector<std::string>::iterator& it, LocationConfi
     parse << *it;
     parse >> n;
     parse >> c;
-    if (n < 0 || n > std::numeric_limits<int>::max())
+    if (n < 0 || static_cast<size_t>(n) > std::numeric_limits<size_t>::max())
 	{
         throw std::runtime_error("Parser: configuration error");
 	}
@@ -832,6 +842,7 @@ void	Parser::checkServerNames(std::vector<Server>& servers)
         {
             std::cerr << "Duplicate server_name '" << name << "' between servers (first occurrence and index " << i << ")\n";
         }
+        /*9. checkServerNames solo avisa con cerr pero no lanza — checkListen sí lanza. Inconsistente.*/
     }
 }
 
@@ -852,6 +863,10 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
     }
     if (this->chooseState(this->_tokens))
         ;
+    /*. chooseState valida sintaxis pero no lanza excepción — devuelve 1 pero en el constructor lo ignorás:
+    cppif (this->chooseState(this->_tokens))
+    ;  // ← no hace nada
+    Deberías lanzar una excepción aquí igual que con tokenize.*/
     it = _tokens.begin();
     end = _tokens.end();
     int i = 0;
@@ -911,7 +926,6 @@ Parser::~Parser()
 {
     _tokens.clear();
     _listens.clear();
-    _lflags.clear();
 	 if (_infile.is_open())
         _infile.close();
 }

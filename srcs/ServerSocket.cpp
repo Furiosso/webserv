@@ -60,6 +60,18 @@ static void	restartListenFd(int& listen_fd)
 
 bool	ServerSocket::createListeners(std::vector<Server>& servers)
 {
+	/*
+	1. createListeners — varios servidores comparten el mismo listen_fd si tienen el mismo ip:port
+	Cuando un ip:port ya está en _created, haces continue y no llamas a servers[i].setFd(...). Eso significa que el segundo servidor que escucha en el mismo puerto se queda con _fd sin inicializar (-1 si aplicaste el fix anterior). Necesitas buscar el fd ya creado y asignárselo:
+	cppif (_created.find(key) != _created.end())
+	{
+    	// Buscar el fd ya creado para este ip:port y asignarlo
+    	for (size_t k = 0; k < _listeners.size(); ++k) {
+        // necesitarías un map<pair, int> en lugar de un set para hacer esto bien
+    }
+    	continue;
+	}
+	La solución limpia es cambiar _created de std::set a std::map<std::pair<std::string,std::string>, int> que mapee ip:port → fd.*/
 	int		on = 1;
 	bool	any = false;
 	for (std::vector<Server>::size_type i = 0; i < servers.size(); i++)
@@ -75,7 +87,7 @@ bool	ServerSocket::createListeners(std::vector<Server>& servers)
 			struct addrinfo		hints;
 			struct addrinfo*	res = NULL;
 			ft_bzero(&hints, sizeof(hints));
-			hints.ai_family = AF_UNSPEC;
+			hints.ai_family = AF_INET;
 			hints.ai_socktype = SOCK_STREAM;
 			hints.ai_flags = AI_PASSIVE;
 			int	gai = getaddrinfo(ip.c_str(), port.c_str(), &hints, &res);

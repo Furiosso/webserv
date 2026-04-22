@@ -21,8 +21,6 @@ static void printVector(const std::vector<std::string>& v)
 
 int main (int argc, char** argv, char** env)
 {
-    (void)env;
-
     if (argc != 2)
     {
         std::cerr << "Invalid arguments\n";
@@ -30,8 +28,8 @@ int main (int argc, char** argv, char** env)
     }
     try
     {
-        std::vector<Server>         servers;
-        Parser parser(argv[1], servers);
+        std::vector<Server> servers;
+        Parser              parser(argv[1], servers);
         for (std::vector<Server>::size_type i = 0; i < servers.size(); ++i)
         {
             const ServerConfig& cfg = servers[i].getConfig();
@@ -103,6 +101,19 @@ int main (int argc, char** argv, char** env)
             return 1;
         }
         std::vector<struct pollfd> pollfds = sockman.getPollfds();
+        /*Una línea, pero hay un problema importante aquí relacionado con el punto 3 y 4 que ya mencioné:
+        Confirma el bug de double-close y código muerto
+        Con esta línea copiás el vector de pollfds de sockman al pollfds local del main. Eso significa:
+
+        ServerSocket::_pollfds sí se usa (se copia aquí) — así que el punto 4 queda descartado, bien.
+        Pero ahora tienes los mismos fds en dos sitios: sockman._listeners y pollfds del main. Cuando el main cierra fds individualmente con close(pollfds[i].fd) a lo largo del loop, y luego el destructor de sockman llama a closeAll() al salir del scope, esos mismos fds se cierran dos veces. Eso es UB y puede causar cierre accidental de fds reabiertos por el OS con el mismo número.
+
+        La solución más limpia para webserv:
+        Añade un método ServerSocket::clearListeners() que vacíe _listeners sin cerrar nada, y llámalo justo después de esta línea:
+        std::vector<struct pollfd> pollfds = sockman.getPollfds();
+        sockman.clearListeners(); // transfiere "ownership" al main
+        Así el destructor de sockman no cierra nada, y el main es el único dueño de los fds.
+        Pasa el siguiente fragmento.*/
         std::vector<Client> clients;
         // Map CGI fds (in_fd/out_fd) to client index in `clients` vector
     // Map CGI fd -> client socket fd (int). We store client socket fd instead
