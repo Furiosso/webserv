@@ -134,7 +134,8 @@ int main (int argc, char** argv, char** env)
                     for (size_t k = 0; k < pollfds.size(); ) {
                         if (pollfds[k].fd == infd || pollfds[k].fd == outfd) {
                             std::cerr << "unregisterCgiFds: removing fd=" << pollfds[k].fd << "\n";
-                            close(pollfds[k].fd);
+                            /*if (pollfds[k].fd > 0)
+								close(pollfds[k].fd);*/
                             std::swap(pollfds[k], pollfds.back());
                             pollfds.pop_back();
                         } else ++k;
@@ -184,11 +185,29 @@ int main (int argc, char** argv, char** env)
                 //comprobar signals
                 if (pollfds[i].revents & POLLHUP)
 				{
-                    //std::cout << "sus muertos\n";
-					close(pollfds[i].fd);
-					std::swap(pollfds[i], pollfds.back());
-					pollfds.pop_back();
-					continue;
+				    int fd = pollfds[i].fd;
+				    if (cgiFdToClientIdx.count(fd)) {
+				        // Es un pipe CGI — dejar que handleCgiFdEvent lo gestione
+				        int clientSock = cgiFdToClientIdx[fd];
+				        for (size_t ci = 0; ci < clients.size(); ++ci) {
+				            if (clients[ci].getClientFd() == clientSock) {
+				                clients[ci].handleCgiFdEvent(fd, pollfds[i].revents);
+				                if (!clients[ci].isCgiRunning()) {
+				                    int infd = clients[ci].getCgiInFd();
+				                    int outfd = clients[ci].getCgiOutFd();
+				                    CgiHelpers::unregisterCgiFds(pollfds, cgiFdToClientIdx, infd, outfd);
+				                }
+				                break;
+				            }
+				        }
+				        // No cerrar el pollfd aquí, unregisterCgiFds ya lo eliminó si procede
+				        continue;
+				    }
+				    // fd de cliente normal
+				    close(pollfds[i].fd);
+				    std::swap(pollfds[i], pollfds.back());
+				    pollfds.pop_back();
+				    continue;
 				}
 				if(pollfds[i].revents & POLLIN)
 				{
@@ -338,10 +357,11 @@ int main (int argc, char** argv, char** env)
                                     }
                                     if (clients[j].getIsBodyReady() == true)
                                     {
-                                        if (clients[j].isCgiRunning())
+                                        /*if (clients[j].isCgiRunning())
                                             pollfds[i].events = POLLIN;
-                                        else
-                                            pollfds[i].events = POLLOUT;
+                                        else*/
+										clients[j].sendResponse();
+										pollfds[i].events = POLLOUT;
                                     }
                                 }
 								break ;
@@ -452,73 +472,3 @@ int main (int argc, char** argv, char** env)
     }
 }
 
-
-
-//PRINTEO SERVER.. METER EN TRY DESPUES DE INICIARLOS
-
-//borrar abajo
-        /*for (std::vector<Server>::size_type i = 0; i < servers.size(); ++i)
-        {
-            const ServerConfig& cfg = servers[i].getConfig();
-            std::cout << "=== Server #" << i << " ===\n";
-
-            std::cout << "Listen:\n";
-            for (std::multimap<std::string, std::string>::const_iterator it = cfg.listen.begin();
-                 it != cfg.listen.end(); ++it)
-                std::cout << "  " << it->first << ":" << it->second << "\n";
-
-            std::cout << "CGI:\n";
-            for (std::map<std::string, std::string>::const_iterator it = cfg.cgi.begin();
-                 it != cfg.cgi.end(); ++it)
-                std::cout << "  " << it->first << " -> " << it->second << "\n";
-
-            std::cout << "Index: ";
-            printVector(cfg.index);
-            std::cout << "\n";
-
-            std::cout << std::boolalpha;
-            std::cout << "Autoindex: " << cfg.autoindex << "\n";
-            std::cout << "Root: " << cfg.root << "\n";
-            std::cout << "Alias: " << cfg.alias << "\n";
-            std::cout << "Server name: " << cfg.server_name << "\n";
-            std::cout << "Client max body size: " << cfg.client_max_body_size << "\n";
-
-            std::cout << "Allowed methods: ";
-            printVector(cfg.allowed_methods);
-            std::cout << "\n";
-
-            std::cout << "Error pages:\n";
-            for (std::map<int, std::string>::const_iterator it = cfg.error_pages.begin();
-                 it != cfg.error_pages.end(); ++it)
-                std::cout << "  " << it->first << " -> " << it->second << "\n";
-
-            std::cout << "isRootOrAlias: " << cfg.isRootOrAlias << "\n";
-
-            std::cout << "Locations (" << cfg.locations.size() << "):\n";
-            for (std::vector<LocationConfig>::size_type j = 0; j < cfg.locations.size(); ++j)
-            {
-                const LocationConfig& loc = cfg.locations[j];
-                std::cout << "  -- Location #" << j << " --\n";
-                std::cout << "    Path: " << loc.path << "\n";
-                std::cout << "    Root: " << loc.root << "\n";
-                std::cout << "    Alias: " << loc.alias << "\n";
-                std::cout << "    Index: ";
-                printVector(loc.index);
-                std::cout << "\n";
-                std::cout << "    Allowed methods: ";
-                printVector(loc.allowed_methods);
-                std::cout << "\n";
-                std::cout << "    CGI:\n";
-                for (std::map<std::string, std::string>::const_iterator it = loc.cgi.begin();
-                     it != loc.cgi.end(); ++it)
-                    std::cout << "      " << it->first << " -> " << it->second << "\n";
-                std::cout << "    Error pages:\n";
-                for (std::map<int, std::string>::const_iterator it = loc.error_pages.begin();
-                     it != loc.error_pages.end(); ++it)
-                    std::cout << "      " << it->first << " -> " << it->second << "\n";
-                std::cout << "    Autoindex: " << loc.autoindex << "\n";
-                std::cout << "    isRootOrAlias: " << loc.isRootOrAlias << "\n";
-            }
-
-            std::cout << std::noboolalpha << "======================\n\n";
-        }*/

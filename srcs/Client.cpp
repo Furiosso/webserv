@@ -309,41 +309,43 @@ void Client::	chargeHeader()
 	}
 	else if (bytesRead == 0)
 	{
-		this->_status = 400;
-    	this->_isHeaderReady = true;
-    	this->_isBodyReady = true;
-    	return;
-		/*// cliente cerró la conexión: puede significar EOF after body
-		if (this->_headerContent.method == "POST")
+		// cliente cerró la conexión: if we already have the expected body length,
+		// mark body ready. Otherwise treat as premature EOF and set an error.
+		if (!this->_headerContent.isChunked)
 		{
-			// If Content-Length was set and we've already read enough, mark body ready
-			if (!this->_headerContent.isChunked)
+			if (this->_headerContent.ContentLength != 0)
 			{
-				if (this->_headerContent.ContentLength != 0 && this->_body.size() >= this->_headerContent.ContentLength)
+				if (this->_body.size() >= this->_headerContent.ContentLength)
 				{
 					if (this->_body.size() > this->_headerContent.ContentLength)
 						this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
 					this->_isBodyReady = true;
 					this->_request[1] = this->_body;
-					std::cout << "chargeBody: EOF but body complete, size=" << this->_body.size() << "\n";
 					return;
 				}
-				// If no Content-Length (unlikely) but some body present, consider it ready
-				if (this->_headerContent.ContentLength == 0 && !this->_body.empty())
-				{
-					this->_isBodyReady = true;
-					this->_request[1] = this->_body;
-					std::cout << "chargeBody: EOF with body and no Content-Length, size=" << this->_body.size() << "\n";
-					return;
-				}
+				// premature EOF
+				this->_status = 400;
+				return;
 			}
-			// Otherwise, treat as client closed prematurely -> mark error so main will cleanup
+			else
+			{
+				// No Content-Length and connection closed -> accept current body
+				this->_isBodyReady = true;
+				this->_request[1] = this->_body;
+				return;
+			}
+		}
+		else
+		{
+			if (this->_isBodyReady)
+			{
+				// Chunked body already completed; EOF after the final chunk is normal.
+				return;
+			}
+			// For chunked transfer, rely on chunkManagement to set _isBodyReady; treat this as error
 			this->_status = 400;
 			return;
 		}
-		// For non-POST methods: mark as closed so main will cleanup
-		this->_status = 200;
-		return;*/
 	}
 	else
 	{
@@ -393,6 +395,12 @@ void Client::	chargeHeader()
 				std::cerr << "Exception in setPath(): " << e.what() << std::endl;
 				this->_status = 500;
 			}
+				if (this->_status == 413)
+				{
+					this->_isHeaderReady = true;
+					this->_isBodyReady = true;
+					return ;
+				}
             std::cout << "CHARGE HEADER3\n";
 			std::cout << "error: " << this->_status << std::endl;
 			std::cout << "header path: " << this->_headerContent.path << std::endl;
@@ -406,6 +414,10 @@ void Client::	chargeHeader()
 					{
 						this->_chunkLine += extra;
 						chunkManagement();
+						if (this->_isBodyReady)
+						{
+							this->_request[1] = this->_body;
+						}
 					}
 					else
 					{
@@ -434,7 +446,7 @@ void Client::	chargeHeader()
 								(only treat the buffer-as-body when HTTP framing semantics allow it, e.g., when the connection will be closed to signal end-of-body).
 							- Add size limits and validation, ensure request has the expected structure before writing to index 1, replace std::cout with a proper logger,
 								and add explicit handling for chunked encoding or for reading until connection close if Content-Length is absent.
-							These changes make the fallback safer and more robust.
+							Estas cambios hacen el fallback más seguro y robusto.
 							*/
 							_status = 411;
 							this->_isBodyReady = true;
@@ -471,6 +483,7 @@ static bool setNonBlocking(int fd)
 /* Build a new envp (char*[] terminated by NULL) by merging parent_env and
    extra variables (extras). The returned envp is allocated with new[] and
    each string with new[]. Caller must free with freeEnvp(). */
+static void freeEnvp(char **envp);
 static char **buildEnvpFromMapAndParent(const std::map<std::string, std::string>& extras, char **parent_env)
 {
 	std::map<std::string, std::string> merged;
@@ -554,8 +567,6 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		return false;
 	}
 	pid_t pid = fork();
-	/*while (*env)
-		std::cout <<"pid: " << pid<< "ENV:::::::::::::::::" <<*(env)++ << std::endl;*/
 	if (pid < 0)
 	{
 		close(inpipe[0]);
@@ -566,10 +577,8 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 	}
 	else if (pid == 0)
 	{
-		/* child: set up stdio from pipes */
 		if (dup2(inpipe[0], STDIN_FILENO) == -1) _exit(127);
 		if (dup2(outpipe[1], STDOUT_FILENO) == -1) _exit(127);
-		/* close both ends of pipes in child */
 		close(inpipe[0]);
 		close(inpipe[1]);
 		close(outpipe[0]);
@@ -639,6 +648,15 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		std::map<std::string,std::string> extras;
 		extras["REQUEST_METHOD"] = _headerContent.method;
 		extras["SERVER_PROTOCOL"] = _headerContent.protocol;
+		std::string lower = strToLower(this->_header);
+		size_t ct_pos = lower.find("content-type:");
+		if (ct_pos != std::string::npos) {
+		    size_t vs = ct_pos + 13;
+		    while (vs < _header.size() && (_header[vs] == ' ' || _header[vs] == '\t')) ++vs;
+		    size_t ve = _header.find("\r\n", vs);
+		    if (ve == std::string::npos) ve = _header.size();
+		    extras["CONTENT_TYPE"] = _header.substr(vs, ve - vs);
+		}
 		if (_headerContent.ContentLength > 0)
 		{
 			std::ostringstream __tmp_ss;
@@ -647,16 +665,13 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		}
 		else if (_headerContent.method == "POST")
 		{
-			// fallback: use currently buffered body size if no Content-Length set
 			std::ostringstream __tmp_ss;
 			__tmp_ss << _body.size();
 			extras["CONTENT_LENGTH"] = __tmp_ss.str();
 		}
 		if (!this->_headerContent.host.empty())
 			extras["SERVER_NAME"] = this->_headerContent.host;
-		// SCRIPT_FILENAME = filesystem path to script
 		extras["SCRIPT_FILENAME"] = scriptPath;
-		// Try to obtain original request URI (path + optional ?query)
 		std::string request_uri;
 		if (!this->_request[0].empty())
 		{
@@ -722,7 +737,7 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		if (_headerContent.ContentLength != 0 && _cgi.write_buf.size() > _headerContent.ContentLength)
 			_cgi.write_buf = _cgi.write_buf.substr(0, _headerContent.ContentLength);
 		this->_body.clear();
-		this->_isBodyReady = false;
+		//this->_isBodyReady = false;
 		std::cout << "BODY EN CGI" <<_body << std::endl;
 		_cgi.write_pos = 0;
 		_cgi.read_buf.clear();
@@ -731,6 +746,7 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		_cgi.out_closed = false;
 		_cgi.finalized = false;
 		setNonBlocking(_cgi.out_fd);
+		setNonBlocking(_cgi.in_fd);
 		// Try to write any buffered request body to the CGI stdin immediately
 		// (non-blocking). This avoids the child printing a complete response
 		// and the parent finalizing before the stdin body has been delivered,
@@ -849,6 +865,8 @@ void Client::handleCgiFdEvent(int fd, short revents)
 				_cgi.write_pos += (size_t)w;
 			else
 			{
+				/*if (errno == EAGAIN || errno == EWOULDBLOCK)
+                	break;*/
 				close(_cgi.in_fd);
 				_cgi.in_fd = -1;
 				_cgi.in_closed = true;
@@ -1553,18 +1571,16 @@ void	Client::chunkManagement() //corregir esto
 				return ;
 			hexLen = this->_chunkLine.substr(0, i);
 			this->_chunkLen = hexToDecimal(hexLen);
+			// remove the chunk-size line including CRLF so the buffer starts at chunk-data
+			this->_chunkLine.erase(0, i + 2);
 			if (this->_chunkLen == 0)
 			{
-				if (this->_chunkLine[0] != '\r' || this->_chunkLine[1] != '\n')
-    			{
-        			this->_status = 400;
-        			return ;
-    			}
-            	this->_chunkLine.erase(0, 2);
+				// final chunk: consume the following CRLF if present and mark body ready
+				if (this->_chunkLine.size() >= 2 && this->_chunkLine[0] == '\r' && this->_chunkLine[1] == '\n')
+					this->_chunkLine.erase(0, 2);
 				this->_isBodyReady = true;
 				return ;
 			}
-			this->_chunkLine.erase(0, i + 2);
 		}
 		sublen = this->_chunkLen;
 		if (this->_chunkLine.size() < this->_chunkLen + 2)
@@ -1590,7 +1606,16 @@ void	Client::chunkManagement() //corregir esto
 	void	Client::chargeBody()
 	{
 		if (this->_headerContent.method != "POST")
+		{
 			return ;
+		}
+		// If a previous check set status 413, ignore any further body bytes.
+		if (this->_status == 413)
+		{
+			// For non-blocking handling we simply return and let the main loop
+			// send the error response; avoid accumulating body bytes.
+			return;
+		}
 		//std::cout << "ENTER chargeBody fd=" << this->_fd << " path=" << this->_headerContent.path << "\n";
 		ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer), 0); // sustituir el tamaño del buffer a una macro
 		//std::cout << "chargeBody: recv returned " << bytesRead << " on fd=" << this->_fd << "\n";
@@ -1604,7 +1629,7 @@ void	Client::chunkManagement() //corregir esto
 		}
 		else if (bytesRead == 0)
 		{
-			// cliente cerró la conexión: if we already have the expected body length,
+						// cliente cerró la conexión: if we already have the expected body length,
 			// mark body ready. Otherwise treat as premature EOF and set an error.
 			if (!this->_headerContent.isChunked)
 			{
@@ -1630,9 +1655,17 @@ void	Client::chunkManagement() //corregir esto
 					return;
 				}
 			}
-			// For chunked transfer, rely on chunkManagement to set _isBodyReady; treat this as error
-			this->_status = 400;
-			return;
+			else
+			{
+				if (this->_isBodyReady)
+				{
+					// Chunked body already completed; EOF after the final chunk is normal.
+					return;
+				}
+				// For chunked transfer, rely on chunkManagement to set _isBodyReady; treat this as error
+				this->_status = 400;
+				return;
+			}
 		}
 		else
 		{
@@ -1990,6 +2023,19 @@ void	Client::sendResponse()
 
 		if (this->_headerContent.method == "POST")
 		{
+			// If Content-Length checks or location/server limits set 413, reply now
+			if (this->_status == 413)
+			{
+				std::ostringstream hs_err;
+				// Proper HTTP status line: e.g. "HTTP/1.1 413 Payload Too Large"
+				hs_err << this->_headerContent.protocol << " " << this->_status << " " << reasonPhrase(this->_status) << "\r\n";
+				hs_err << "Connection: close\r\n";
+				hs_err << "Content-Length: 0\r\n\r\n";
+				_sendBuffer += hs_err.str();
+				_isSent = true;
+				flushResponse();
+				return;
+			}
 			std::cout << "sendResponse: POST path=" << this->_headerContent.path << " ContentLength=" << this->_headerContent.ContentLength << " body.size=" << this->_body.size() << "\n";
 			std::string serverRoot = _listener.getConfig().root;
 			if (!isWithinRoot(_headerContent.path, serverRoot))
