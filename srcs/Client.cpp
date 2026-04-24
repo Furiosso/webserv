@@ -763,7 +763,7 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 				else
 				{
 					if (errno == EAGAIN || errno == EWOULDBLOCK)
-						break; // try later via POLLOUT (only occurs if fd was set non-blocking elsewhere)
+						break; // try later via POLLOUT (only occurs if fd was set non-blocking elsewhere) REVISAR
 					// fatal write error: close and mark closed
 					close(_cgi.in_fd);
 					_cgi.in_fd = -1;
@@ -962,7 +962,7 @@ void Client::finalizeCgiIfDone()
 			{
 				if (errno == EAGAIN || errno == EWOULDBLOCK)
 				{
-					// No more data available right now; leave fd open and proceed
+					// No more data available right now; leave fd open and proceed REVISAR
 					break;
 				}
 				// On other errors, close the fd and mark closed
