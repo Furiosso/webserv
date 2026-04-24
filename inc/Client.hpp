@@ -78,7 +78,7 @@ public:
 	Server		getListener() const;
 	std::string	getMethod() const;
 	void		setPath();
-	bool		checkMethod(std::string& method, const std::vector<std::string>& vec);
+	bool		checkMethod(const std::string& method, const std::vector<std::string>& vec) const;
 	void		checkPathValidity(std::string& path, std::vector<std::string>& index, bool autoindex, const std::string& root);
 	bool		handleCgiIfNeeded();
 	std::string	joinPath(const std::string& a, const std::string& b);

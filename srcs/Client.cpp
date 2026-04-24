@@ -349,9 +349,16 @@ void Client::	chargeHeader()
 	{
 		this->_buffer[bytesRead] = '\0'; // Null-terminate the buffer
 		this->_header += this->_buffer; // Append to the request string
-		if (this->_header.find("\r\n\r\n") != std::string::npos) // End of headers
+		size_t headerEnd = this->_header.find("\r\n\r\n");
+		if (headerEnd == std::string::npos &&_header.size() > 8192) // Arbitrary limit to prevent header overflow
 		{
-			size_t headerEnd = this->_header.find("\r\n\r\n");
+			_status = 431;
+			_isHeaderReady = true;
+			_isBodyReady = true;
+			return ;
+		}
+		if (headerEnd != std::string::npos) // End of headers
+		{
 			// Preserve the full buffer so we can extract a body that may have
 			// been received together with the headers in the same recv().
 			std::string full = this->_header;
@@ -362,13 +369,19 @@ void Client::	chargeHeader()
 			// If client included 'Expect: 100-continue' we must acknowledge it
 			// so browsers will proceed to send the request body.
 			
-			std::string lower = full;
-			lower = strToLower(lower);
+			std::string lower = strToLower(this->_header);
 			if (lower.find("expect: 100-continue") != std::string::npos)
 			{
 				const char *cont = "HTTP/1.1 100 Continue\r\n\r\n";
 				ssize_t s = send(this->_fd, cont, std::strlen(cont), 0);
-				(void)s;
+				if (s < 0)
+				{
+					std::cerr << "Error sending 100 Continue response: " << strerror(errno) << std::endl;
+					this->_status = 500;
+					this->_isHeaderReady = true;
+					this->_isBodyReady = true;
+					return;
+				}
 			}
 			
 			std::cout << "after parseHeader: ContentLength=" << this->_headerContent.ContentLength << " isChunked=" << this->_headerContent.isChunked << " method=" << this->_headerContent.method << "\n";
@@ -406,7 +419,7 @@ void Client::	chargeHeader()
 							this->_request[1] = this->_body;
 							std::cout << "CHARGE HEADER: body already complete, size=" << this->_body.size() << "\n";
 						}
-						else if (this->_body.size() > 0 && this->_headerContent.ContentLength == 0)
+						else if (this->_headerContent.ContentLength == 0)
 						{
 							// Fallback: headers parsing didn't capture Content-Length but body bytes arrived
 							/*This branch triggers when some bytes have been accumulated in this->_body but the parsed headers report ContentLength == 0.
@@ -423,10 +436,9 @@ void Client::	chargeHeader()
 								and add explicit handling for chunked encoding or for reading until connection close if Content-Length is absent.
 							These changes make the fallback safer and more robust.
 							*/
-							this->_headerContent.ContentLength = this->_body.size();
+							_status = 411;
 							this->_isBodyReady = true;
-							this->_request[1] = this->_body;
-							std::cout << "CHARGE HEADER: fallback mark body ready, size=" << this->_body.size() << "\n";
+							return ;
 						}
 					}
 				}
@@ -436,11 +448,11 @@ void Client::	chargeHeader()
 			if (_headerContent.method != "POST")
 				_isBodyReady = true;
 		}
-		ft_bzero(this->_buffer, sizeof(this->_buffer));
+		//ft_bzero(this->_buffer, sizeof(this->_buffer));
 	}
 }
 
-bool	Client::checkMethod(std::string& method, const std::vector<std::string>& vec)
+bool	Client::checkMethod(const std::string& method, const std::vector<std::string>& vec) const
 {
 	if (std::find(vec.begin(), vec.end(), method) == vec.end())
 		return false;
@@ -476,18 +488,27 @@ static char **buildEnvpFromMapAndParent(const std::map<std::string, std::string>
 	}
 	for (std::map<std::string, std::string>::const_iterator it = extras.begin(); it != extras.end(); ++it)
 		merged[it->first] = it->second; // override or insert
-
 	char **envp = new char*[merged.size() + 1];
-	size_t i = 0;
-	for (std::map<std::string,std::string>::const_iterator it = merged.begin(); it != merged.end(); ++it)
+	try
 	{
-		std::string kv = it->first + "=" + it->second;
+		
+		size_t i = 0;
+		for (std::map<std::string,std::string>::const_iterator it = merged.begin(); it != merged.end(); ++it)
+		{
+			std::string kv = it->first + "=" + it->second;
 		envp[i] = new char[kv.size() + 1];
-		std::strncpy(envp[i], kv.c_str(), kv.size() + 1);
+		std::memcpy(envp[i], kv.c_str(), kv.size() + 1);
 		++i;
+		}
+		envp[i] = NULL;
+		return envp;
 	}
-	envp[i] = NULL;
-	return envp;
+	catch(const std::bad_alloc& e)
+	{
+		freeEnvp(envp);
+		std::cerr << "Failed to allocate memory for envp: " << e.what() << '\n';
+		return NULL;
+	}
 }
 
 static void freeEnvp(char **envp)
@@ -500,6 +521,28 @@ static void freeEnvp(char **envp)
 
 bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::string& interpreter)
 {
+	/*2. child_envp no se libera si buildEnvpFromMapAndParent devuelve NULL y luego se pasa a execve
+	cppchar **child_envp = buildEnvpFromMapAndParent(extras, env);
+	execve(argv_exec[0], argv_exec, child_envp);
+	Si child_envp es NULL (por bad_alloc), lo pasas directamente a execve sin comprobar. Algunos sistemas aceptan NULL como envp vacío, otros no. Añade:
+	cppif (!child_envp) _exit(127);
+	3. _cgi.in_fd no se pone en modo no-bloqueante antes del write inmediato
+	cppsetNonBlocking(_cgi.out_fd);  // ← solo out_fd
+	// ...
+	ssize_t w = ::write(_cgi.in_fd, buf, to_write);  // ← in_fd puede ser bloqueante
+	El write inmediato al in_fd puede bloquearse si el pipe se llena (body grande). setNonBlocking(_cgi.in_fd) se llama más abajo solo si queda escritura pendiente — debería llamarse antes del bucle de escritura.
+	4. _isBodyReady = false en el padre después de lanzar CGI
+	cppthis->_isBodyReady = false;
+	Esto puede confundir al main loop haciéndole pensar que el body aún no llegó y llamando a chargeBody de nuevo. Considera usar un flag separado como _cgiStarted en lugar de reusar _isBodyReady.
+	5. std::cerr en el hijo después de fork
+	cppstd::cerr << "child argv:...
+	Escribir a std::cerr en el hijo después de fork es seguro solo si no hay otros threads. Para webserv de un solo hilo está bien, pero técnicamente los streams de C++ no son async-signal-safe. Usa write(2, ...) en el hijo si quieres ser estricto.
+	Problemas de diseño
+	6. Debug output extenso en producción
+	Hay varios std::cerr y std::cout de debug que hay que eliminar antes de la evaluación, incluyendo el preview hex del body y el "BODY EN CGI".
+	7. Lógica de escritura inmediata al pipe es compleja
+	El bucle de write inmediato en el padre duplica lógica que ya tienes en handleCgiFdEvent. Considera simplificarlo dejando toda la escritura al pipe en handleCgiFdEvent vía POLLOUT, y en startCgiNonBlocking solo inicializar el estado.
+	*/
 	int	inpipe[2];
 	int	outpipe[2];
 	if (pipe(inpipe) == -1)
