@@ -745,13 +745,13 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		_cgi.in_closed = false;
 		_cgi.out_closed = false;
 		_cgi.finalized = false;
-		setNonBlocking(_cgi.out_fd);
 		setNonBlocking(_cgi.in_fd);
+		setNonBlocking(_cgi.out_fd);
 		// Try to write any buffered request body to the CGI stdin immediately
 		// (non-blocking). This avoids the child printing a complete response
 		// and the parent finalizing before the stdin body has been delivered,
 		// which would cause the CGI to block waiting for stdin.
-		if (!_cgi.write_buf.empty() && _cgi.in_fd >= 0)
+		/*if (!_cgi.write_buf.empty() && _cgi.in_fd >= 0)
 		{
 			while (_cgi.write_pos < _cgi.write_buf.size())
 			{
@@ -806,6 +806,18 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 			_cgi.in_closed = true;
 		}
 		std::cerr << "startCgiNonBlocking (parent): pid=" << pid << " in_fd=" << _cgi.in_fd << " out_fd=" << _cgi.out_fd << " write_buf_size=" << _cgi.write_buf.size() << " in_closed=" << _cgi.in_closed << "\n";
+		return true;*/
+		if (_cgi.write_buf.empty() && _cgi.in_fd >= 0)
+		{
+		    close(_cgi.in_fd);
+		    _cgi.in_fd = -1;
+		    _cgi.in_closed = true;
+		}
+		std::cerr << "startCgiNonBlocking (parent): pid=" << pid
+		          << " in_fd=" << _cgi.in_fd
+		          << " out_fd=" << _cgi.out_fd
+		          << " write_buf_size=" << _cgi.write_buf.size()
+		          << " in_closed=" << _cgi.in_closed << "\n";
 		return true;
 	}
 	return false;
@@ -863,6 +875,8 @@ void Client::handleCgiFdEvent(int fd, short revents)
 			ssize_t	w = write(_cgi.in_fd, buf, to_write);
 			if (w > 0)
 				_cgi.write_pos += (size_t)w;
+			else if (w < 0)
+				break;
 			else
 			{
 				/*if (errno == EAGAIN || errno == EWOULDBLOCK)
