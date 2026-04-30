@@ -974,15 +974,18 @@ void Client::finalizeCgiIfDone()
 			}
 			else
 			{
-				if (errno == EAGAIN || errno == EWOULDBLOCK)
+				/*if (errno == EAGAIN || errno == EWOULDBLOCK)
 				{
 					// No more data available right now; leave fd open and proceed REVISAR
 					break;
-				}
+				}*/
 				// On other errors, close the fd and mark closed
-				close(_cgi.out_fd);
-				_cgi.out_fd = -1;
-				_cgi.out_closed = true;
+				if (r == 0)
+            	{
+                	close(_cgi.out_fd);
+                	_cgi.out_fd = -1;
+                	_cgi.out_closed = true;
+            	}
 				break;
 			}
 		}
