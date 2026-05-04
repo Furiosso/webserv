@@ -377,12 +377,6 @@ void Client::	chargeHeader()
             std::cout << "CHARGE HEADER3\n";
 			std::cout << "error: " << this->_status << std::endl;
 			std::cout << "header path: " << this->_headerContent.path << std::endl;
-			// Try to start CGI now if the request targets a CGI script.
-			// Previously CGI start was deferred until the body was fully received,
-			// which required a prior GET in some tests. Starting CGI early allows
-			// the CGI process to be created and its stdin kept open so the POST
-			// body can be streamed to it as it arrives.
-			this->handleCgiIfNeeded();
 			if (this->_headerContent.method == "POST")
 			{
 				if (headerEnd + 4 < full.size())
@@ -514,10 +508,9 @@ bool Client::parentProcess(int *inpipe, int *outpipe, pid_t pid)
 	setNonBlocking(_cgi.out_fd);
 	if (_cgi.write_buf.empty() && _cgi.in_fd >= 0)
 	{
-    	// Do NOT close the CGI stdin here if there's no data yet.
-    	// Keep the pipe open so we can stream the POST body as it arrives.
-    	// Closing it here causes early EOF for the CGI when starting it
-    	// before the client has sent the body.
+	    close(_cgi.in_fd);
+	    _cgi.in_fd = -1;
+	    _cgi.in_closed = true;
 	}
 	std::cerr << "startCgiNonBlocking (parent): pid=" << pid
 	          << " in_fd=" << _cgi.in_fd
@@ -1387,10 +1380,7 @@ void	Client::chunkManagement()
 		{
 			sublen = this->_chunkLine.size();
 			this->_chunkLen -= sublen;
-			if (isCgiRunning())
-				_cgi.write_buf += this->_chunkLine.substr(0, sublen);
-			else
-				this->_body += this->_chunkLine.substr(0, sublen);
+			this->_body += this->_chunkLine.substr(0, sublen);
 			this->_chunkLine.erase(0, sublen);
 			return ;
 		}
@@ -1400,10 +1390,7 @@ void	Client::chunkManagement()
     		this->_status = 400;
     		return ;
 		}
-		if (isCgiRunning())
-			_cgi.write_buf += this->_chunkLine.substr(0, sublen);
-		else
-			this->_body += this->_chunkLine.substr(0, sublen);
+		this->_body += this->_chunkLine.substr(0, sublen);
     	this->_chunkLine.erase(0, this->_chunkLen + 2);
     	this->_chunkLen = 0;
 	}
@@ -1417,12 +1404,9 @@ void	Client::chunkManagement()
 		}
 		if (this->_status == 413)
 			return;
-		//std::cout << "ENTER chargeBody fd=" << this->_fd << " path=" << this->_headerContent.path << "\n";
 		ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer), 0); // sustituir el tamaño del buffer a una macro
-		//std::cout << "chargeBody: recv returned " << bytesRead << " on fd=" << this->_fd << "\n";
 		if (bytesRead < 0)
 		{
-			// Non-blocking sockets will often return EAGAIN/EWOULDBLOCK when there's no data yet.
 			if (errno == EAGAIN || errno == EWOULDBLOCK)
 				return;
 			std::cerr << "Error reading from socket (fd " << this->_fd << "): " << strerror(errno) << std::endl;
@@ -1430,8 +1414,6 @@ void	Client::chunkManagement()
 		}
 		else if (bytesRead == 0)
 		{
-						// cliente cerró la conexión: if we already have the expected body length,
-			// mark body ready. Otherwise treat as premature EOF and set an error.
 			if (!this->_headerContent.isChunked)
 			{
 				if (this->_headerContent.ContentLength != 0)
@@ -1444,13 +1426,11 @@ void	Client::chunkManagement()
 						this->_request[1] = this->_body;
 						return;
 					}
-					// premature EOF
 					this->_status = 400;
 					return;
 				}
 				else
 				{
-					// No Content-Length and connection closed -> accept current body
 					this->_isBodyReady = true;
 					this->_request[1] = this->_body;
 					return;
@@ -1459,50 +1439,27 @@ void	Client::chunkManagement()
 			else
 			{
 				if (this->_isBodyReady)
-				{
-					// Chunked body already completed; EOF after the final chunk is normal.
 					return;
-				}
-				// For chunked transfer, rely on chunkManagement to set _isBodyReady; treat this as error
 				this->_status = 400;
 				return;
 			}
 		}
 		else
 		{
-		// Append raw bytes (binary-safe)
 			if (this->_headerContent.isChunked == true)
 			{
-				// For chunked mode, append the newly-received bytes into the chunkLine
 				this->_chunkLine.append(this->_buffer, bytesRead);
 				chunkManagement();
 				ft_bzero(this->_buffer, sizeof(this->_buffer));
 				return ;
 			}
-		// If a CGI process is running, stream data to its stdin buffer instead
-		if (isCgiRunning()) {
-			_cgi.write_buf.append(this->_buffer, bytesRead);
-			std::cerr << "chargeBody: streaming to CGI fd=" << this->_cgi.in_fd << " recv=" << bytesRead << " cgi_buf=" << _cgi.write_buf.size() << "\n";
-		} else {
-			this->_body.append(this->_buffer, bytesRead); // Append raw bytes
-			std::cerr << "chargeBody: fd=" << this->_fd << " recv=" << bytesRead << " total_body=" << this->_body.size() << " target=" << this->_headerContent.ContentLength << "\n";
-		}
-		if (this->_headerContent.ContentLength <= (isCgiRunning() ? _cgi.write_buf.size() : this->_body.size()))
+			this->_body.append(this->_buffer, bytesRead);
+			if (this->_headerContent.ContentLength <= this->_body.size())
 			{
-			if (isCgiRunning()) {
-				if (_cgi.write_buf.size() > this->_headerContent.ContentLength)
-					_cgi.write_buf = _cgi.write_buf.substr(0, this->_headerContent.ContentLength);
-				// When we've queued all expected bytes to the CGI write buffer, mark body ready
-				this->_isBodyReady = true;
-				this->_request[1] = _cgi.write_buf;
-				std::cout << "CHARGE BODY: streamed to CGI, queued size=" << _cgi.write_buf.size() << "\n";
-			} else {
 				if (this->_body.size() > this->_headerContent.ContentLength)
 					this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
 				this->_isBodyReady = true;
 				this->_request[1] = this->_body;
-				std::cout << "CHARGE BODY: body ready, size=" << this->_body.size() << "\n";
-			}
 			}
 			ft_bzero(this->_buffer, sizeof(this->_buffer));
 		}
@@ -1515,7 +1472,6 @@ void	Client::flushResponse()
 	while (!_sendBuffer.empty())
 	{
 		bytesSent = send(this->_fd, _sendBuffer.c_str(), _sendBuffer.size(), 0);
-		std::cerr << "flushResponse: fd=" << this->_fd << " try_send=" << _sendBuffer.size() << " got=" << bytesSent << " errno=" << errno << "\n";
 		if (bytesSent > 0)
 			_sendBuffer.erase(0, bytesSent);
 		else if (bytesSent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
@@ -1531,13 +1487,9 @@ void	Client::flushResponse()
 void	Client::handleDelete()
 {
 	struct stat s;
-	// Enforce server root only: do not allow DELETE outside the server's root,
-	// even if a location alias points elsewhere.
 	std::string root = _listener.getConfig().root;
 	if (!isWithinRoot(_headerContent.path, root))
 	{
-		//std::cout << "EL PUTO ROOT: " << root << "	EL PUTO PATH: " << _headerContent.path << std::endl;
-		//std::cout << "EL BICHOOOOOOOOOOOOOOOOOOOOOOOOOOOO" << std::endl;
 		_status = 403;
 		return;
 	}
@@ -1567,64 +1519,6 @@ void	Client::handleDelete()
 	_status = 204;
 }
 
-/*void	Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& errorPages)
-{
-	std::map<std::pair<int, int>, std::string>::const_iterator it = errorPages.begin();
-	std::map<std::pair<int, int>, std::string>::const_iterator end = errorPages.end();
-
-	for (; it != end; ++it)
-	{
-		if (it->first.first != _status)
-			continue;
-		std::cout << "*******************FIRST.FIRST: " << it->first.first << " | FIRST.SECOND: " << it->first.second << "***************" << std::endl;
-		if (it->first.first != it->first.second)
-			_status = it->first.second;
-		//_headerContent.path = it->second;
-		std::string target = it->second;
-		while (!target.empty() && (target[0] == ' ' || target[0] == '\t'))
-			target.erase(0, 1);
-		while (!target.empty() && (target[target.size() - 1] == ' ' || target[target.size() - 1] == '\t'))
-			target.erase(target.size() - 1);
-		// EXTERNAL URL
-		if (target.size() >= 7 && (target.substr(0, 7) == "http://" || (target.size() >= 8 && target.substr(0, 8) == "https://")))
-		{
-			_redirectLocation = target;
-			_hasErrorPageResolved = true;
-			return;
-		}
-		_headerContent.path = target;
-		// Local URI or relative path -> resolve to filesystem path using location or server root
-		std::string root = _listener.getConfig().root;
-		if (_isLocation)
-			root = _location.root;
-		std::string resolved;
-		if (!target.empty() && target[0] == '/')
-		{
-			// target is a URI path relative to server/location root
-			// avoid duplicating slashes
-			if (root.size() > 0 && root[root.size() - 1] == '/')
-				resolved = root + (target.size() > 1 ? target.substr(1) : std::string());
-			else
-				resolved = root + target;
-		}
-		else
-		{
-			// treat as relative to root
-			if (root.size() > 0 && root[root.size() - 1] == '/')
-				resolved = root + target;
-			else
-				resolved = root + "/" + target;
-		}
-		// validate resolved path
-		if (!resolved.empty() && isWithinRoot(resolved, root) && access(resolved.c_str(), R_OK) == 0)
-		{
-			_errorResolvedPath = resolved;
-			_hasErrorPageResolved = true;
-			return;
-		}
-	}
-}*/
-
 void Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& errorPages)
 {
     std::map<std::pair<int, int>, std::string>::const_iterator it = errorPages.begin();
@@ -1645,15 +1539,11 @@ void Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& 
 				|| target.find("http://127.0.0.1") == 0);
     		if (isSelfRedirect)
     		{
-        		// Extraer el path de la URL y comprobar si existe
-        		std::string path = target.substr(target.find('/', 7)); // quita "http://host"
+        		std::string path = target.substr(target.find('/', 7));
         		std::string root = _listener.getConfig().root;
         		std::string resolved = root + path;
         		if (access(resolved.c_str(), R_OK) != 0)
-        		{
-            	// El fichero no existe → no redirigir, dejar que se sirva error genérico
             		return ;
-        		}
     		}
             _status = it->first.second;
             _redirectLocation = target;
@@ -1678,8 +1568,6 @@ void Client::chargeStatusData(const std::map<std::pair<int, int>, std::string>& 
             else
                 resolved = root + "/" + target;
         }
-
-        // validar path
         if (!resolved.empty() && isWithinRoot(resolved, root) && access(resolved.c_str(), R_OK) == 0)
         {
             _errorResolvedPath = resolved;
@@ -1709,15 +1597,11 @@ void Client::chargeStatusData(std::map<std::pair<int, int>, std::string>& errorP
 				|| target.find("http://127.0.0.1") == 0);
     		if (isSelfRedirect)
     		{
-        		// Extraer el path de la URL y comprobar si existe
-        		std::string path = target.substr(target.find('/', 7)); // quita "http://host"
+        		std::string path = target.substr(target.find('/', 7));
         		std::string root = _listener.getConfig().root;
         		std::string resolved = root + path;
         		if (access(resolved.c_str(), R_OK) != 0)
-        		{
-            	// El fichero no existe → no redirigir, dejar que se sirva error genérico
             		return ;
-        		}
     		}
             _status = it->first.second;
             _redirectLocation = target;
@@ -1781,34 +1665,19 @@ void	Client::handleErrors()
 		chargeStatusData(_listener.getConfig().error_pages);
 		return ;
 	}
-	//if (this->_status >= 300 && this->_status < 600)
-	//	chargeDefaultErrorPage();
-	/*if (this->_status >= 300 && this->_status < 600)
-	{
-		std::ostringstream hs;
-		hs << this->_headerContent.protocol << " " << this->_status << " " << reasonPhrase(this->_status) << "\r\n";
-		hs << "Connection: close\r\n";
-		hs << "Content-Length: 0\r\n\r\n";
-		_sendBuffer += hs.str();
-		_isSent = true;
-		flushResponse();
-	}*/
 }
 
 void	Client::sendResponse()
 {	
-	std::cout << "ENTER sendResponse for fd " << this->_fd << " method=" << this->_headerContent.method << "\n";
 	if (_sendBuffer.empty())
 	{
-		// If an error was already set before preparing response, send that error code
 		handleErrors();
-		std::cout << "||||||||||||||||||||||||||||||STATUS: " << _status << "||||||||||||||||||||" << std::endl;
-		// If chargeStatusData resolved an external redirect, send it immediately
+		std::cout << "STATUS: " << _status << "" << std::endl;
 		if (_hasErrorPageResolved && !_redirectLocation.empty())
 		{
 			int redirectStatus = _status;
 			if (!(redirectStatus >= 300 && redirectStatus < 400))
-				redirectStatus = 302; // fallback to temporary redirect
+				redirectStatus = 302;
 			std::ostringstream hs;
 			hs << this->_headerContent.protocol << " " << redirectStatus << " " << reasonPhrase(redirectStatus) << "\r\n";
 			hs << "Location: " << _redirectLocation << "\r\n";
@@ -1819,14 +1688,10 @@ void	Client::sendResponse()
 			flushResponse();
 			return;
 		}
-		
-
-		// Handle DELETE specially: do not load the file content before attempting to delete it
 		if (this->_headerContent.method == "DELETE")
 		{
 			handleDelete();
-			handleErrors(); // send error if delete failed, or 204 No Content if succeeded
-			// Success: 204 No Content
+			handleErrors();
 			std::ostringstream hs;
 			hs << this->_headerContent.protocol << " 204 " << reasonPhrase(204) << "\r\n";
 			hs << "Connection: close\r\n";
@@ -1839,11 +1704,9 @@ void	Client::sendResponse()
 
 		if (this->_headerContent.method == "POST")
 		{
-			// If Content-Length checks or location/server limits set 413, reply now
 			if (this->_status == 413)
 			{
 				std::ostringstream hs_err;
-				// Proper HTTP status line: e.g. "HTTP/1.1 413 Payload Too Large"
 				hs_err << this->_headerContent.protocol << " " << this->_status << " " << reasonPhrase(this->_status) << "\r\n";
 				hs_err << "Connection: close\r\n";
 				hs_err << "Content-Length: 0\r\n\r\n";
@@ -1852,12 +1715,10 @@ void	Client::sendResponse()
 				flushResponse();
 				return;
 			}
-			std::cout << "sendResponse: POST path=" << this->_headerContent.path << " ContentLength=" << this->_headerContent.ContentLength << " body.size=" << this->_body.size() << "\n";
 			std::string serverRoot = _listener.getConfig().root;
 			if (!isWithinRoot(_headerContent.path, serverRoot))
 			{
 				this->_status = 403;
-        		// prepare error response (ya lo manejas más arriba)
         		std::ostringstream hs;
         		hs << this->_headerContent.protocol << " " << this->_status << " " << reasonPhrase(this->_status) << "\r\n";
         		hs << "Connection: close\r\n";
@@ -1879,15 +1740,11 @@ void	Client::sendResponse()
 			if (_isLocation)
 				cgiMap = _location.cgi;
 			else
-				cgiMap = _listener.getConfig().cgi; //location.cgi
+				cgiMap = _listener.getConfig().cgi;
 			if (cgiMap.count(ext))
 			{
-				// If the CGI already produced a body for this request, send it
-				// directly to the client instead of starting a new CGI process
-				// or writing it to disk.
 				if (this->_isBodyReady)
 				{
-					// Build response headers using CGI-provided status and content-type
 					int respStatus = this->_status;
 					std::string contentType = _cgiContentType.empty() ? "text/plain" : _cgiContentType;
 					std::ostringstream hs;
@@ -1911,7 +1768,6 @@ void	Client::sendResponse()
 							return;
 						}
 					}
-					// response will be produced when CGI finishes (finalizeCgiIfDone)
 					return;
 				}
 			}
@@ -1948,7 +1804,6 @@ void	Client::sendResponse()
 				status = 200;
 			else
 				status = 201;
-			// Build a Location header using the request path (strip server root)
 			std::string requestUri = this->_headerContent.path;
 			if (requestUri.find(serverRoot) == 0)
 				requestUri = requestUri.substr(serverRoot.size());
@@ -1965,7 +1820,6 @@ void	Client::sendResponse()
 			return;
 		}
 		std::string body;
-		// If path is a directory and autoindex response was requested, generate listing
 		struct stat st;
 		if (stat(this->_headerContent.path.c_str(), &st) == 0 && S_ISDIR(st.st_mode) && _headerContent.isAutoindexResponse)
 		{
@@ -1984,15 +1838,10 @@ void	Client::sendResponse()
 		}
 		else
 		{
-			// If chargeStatusData resolved a custom error file, use it
 			if (_hasErrorPageResolved && !_errorResolvedPath.empty())
 				body = loadContent(_errorResolvedPath);
 			else
 				body.clear();
-
-			// Check CGI for GET/HEAD: if the requested path corresponds to a CGI script
-			// Prefer using the CGI-provided body (set by finalizeCgiIfDone). Only start
-			// the CGI if we don't already have a body and the CGI is not running.
 			if (this->_headerContent.method == "GET" || this->_headerContent.method == "HEAD")
 			{
 				std::string ext = getExtension(_headerContent.path);
@@ -2003,14 +1852,12 @@ void	Client::sendResponse()
 					cgiMap = _listener.getConfig().cgi;
 				if (cgiMap.count(ext))
 				{
-					// If CGI already produced a body, use it
 					if (this->_isBodyReady && !this->_body.empty())
 					{
 						body = this->_body;
 					}
 					else
 					{
-						// No body yet: start CGI (if not running) and wait for finalizeCgiIfDone
 						if (!isCgiRunning())
 						{
 							if (!startCgiNonBlocking(this->_headerContent.path, cgiMap[ext]))
@@ -2019,33 +1866,20 @@ void	Client::sendResponse()
 								return;
 							}
 						}
-						// Response will be produced by finalizeCgiIfDone()
 						return;
 					}
 				}
 			}
-
-			// If not CGI or CGI produced body, and body still empty, load file content
 			if (body.empty())
-			{
 				body = loadContent(this->_headerContent.path);
-			}
 		}
-
-		// Only set default 200 if status indicates success-range
-		//handleErrors();
 		if (!(_status >= 300 && _status < 600))
-		{
 			_status = 200;
-		}
 		else
-		{
 			body = chargeDefaultErrorPage();
-		}
 		std::ostringstream hs;
 		hs << this->_headerContent.protocol << " " << _status << " " << reasonPhrase(_status) << "\r\n";
 		hs << "Content-Length: " << body.size() << "\r\n";
-		// Prefer CGI-specified Content-Type when available
 		if (!this->_cgiContentType.empty())
 			hs << "Content-Type: " << this->_cgiContentType << "\r\n";
 		else if (this->_headerContent.isAutoindexResponse || (_status > 299 && _status < 600))
@@ -2055,44 +1889,23 @@ void	Client::sendResponse()
 		hs << "Connection: close\r\n";
 		hs << "\r\n";
 		_sendBuffer += hs.str();
-		
 		std::cout << "body: " << body << std::endl;
 		if (this->_headerContent.method != "HEAD")   
 			_sendBuffer += body;
 	}
-	// Do not print binary response to stdout (can be very large and block logs)
 	flushResponse();
 }
-
-/*std::string	Client::loadContent(const std::string& filename) const
-{
-	std::ifstream	file(filename.c_str(), std::ios::binary);
-
-	file.seekg(0, std::ios::end);
-	std::streamsize	size = file.tellg();
-	file.seekg(0, std::ios::beg);
-	std::string	buffer(size, '\0');
-	if (size > 0)
-		file.read(&buffer[0], size);
-	return buffer;
-}*/
 
 std::string	Client::loadContent(const std::string& filename) const
 {
 	std::ifstream	file(filename.c_str(), std::ios::binary);
 
 	if (!file.is_open())
-	{
 		return std::string();
-	}
-
 	file.seekg(0, std::ios::end);
 	std::streamoff soff = file.tellg();
 	if (soff <= 0)
-	{
 		return std::string();
-	}
-
 	std::streamsize size = static_cast<std::streamsize>(soff);
 	file.seekg(0, std::ios::beg);
 	std::string buffer;
