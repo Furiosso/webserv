@@ -7,6 +7,9 @@
 #include "Server.hpp"
 #include "Client.hpp"
 #include <typeinfo>
+#include <signal.h>
+#include <sys/signalfd.h>
+#include <unistd.h>
 
 
 //AUXILIAR PARA PRINTEO DE SERVER
@@ -101,6 +104,24 @@ int main (int argc, char** argv, char** env)
             return 1;
         }
         std::vector<struct pollfd> pollfds = sockman.getPollfds();
+        // Setup signalfd to catch termination signals inside the poll loop
+        int sigfd = -1;
+        sigset_t mask;
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGINT);
+        sigaddset(&mask, SIGTERM);
+        sigaddset(&mask, SIGHUP);
+        // Block these signals so they are delivered via signalfd
+        if (sigprocmask(SIG_BLOCK, &mask, NULL) == 0) {
+            sigfd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
+            if (sigfd >= 0) {
+                struct pollfd p; p.fd = sigfd; p.events = POLLIN; p.revents = 0; pollfds.push_back(p);
+            } else {
+                std::cerr << "Warning: failed to create signalfd: " << strerror(errno) << "\n";
+            }
+        } else {
+            std::cerr << "Warning: failed to block signals for signalfd: " << strerror(errno) << "\n";
+        }
         /*Una línea, pero hay un problema importante aquí relacionado con el punto 3 y 4 que ya mencioné:
         Confirma el bug de double-close y código muerto
         Con esta línea copiás el vector de pollfds de sockman al pollfds local del main. Eso significa:
@@ -157,7 +178,8 @@ int main (int argc, char** argv, char** env)
                     // Intentionally empty: cgiFdToClientIdx uses client socket fds, so vector-index-based reassignment is not required.
                 }
             };
-        while (1)
+    bool stop = false;
+    while (!stop)
         {
             nfds_t  nfds = static_cast<nfds_t>(pollfds.size());
 		    int ret = poll(pollfds.data(), nfds, -1);
@@ -182,6 +204,21 @@ int main (int argc, char** argv, char** env)
             {
                 // Debug: show which fd has revents set
                 
+                // check for signal fd first
+                if (sigfd >= 0 && pollfds[i].fd == sigfd && (pollfds[i].revents & POLLIN)) {
+                    struct signalfd_siginfo fdsi;
+                    ssize_t s = read(sigfd, &fdsi, sizeof(fdsi));
+                    if (s == sizeof(fdsi)) {
+                        if (fdsi.ssi_signo == SIGINT || fdsi.ssi_signo == SIGTERM) {
+                            std::cerr << "Received signal to terminate (" << fdsi.ssi_signo << "), shutting down...\n";
+                            stop = true;
+                            break; // break out of pollfds for-loop
+                        } else if (fdsi.ssi_signo == SIGHUP) {
+                            std::cerr << "Received SIGHUP (" << fdsi.ssi_signo << ") - ignoring for now\n";
+                        }
+                    }
+                    continue;
+                }
                 //comprobar signals
                 if (pollfds[i].revents & POLLHUP)
 				{
