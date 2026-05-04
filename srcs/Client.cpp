@@ -238,8 +238,6 @@ static const char* reasonPhrase(int code)
 	}
 }
 
-// Decode percent-encoded URL path (e.g. %2B -> +, %23 -> #). Does not
-// interpret '+' as space because in path components '+' is literal.
 static int hexVal(char c)
 {
 	if (c >= '0' && c <= '9') return c - '0';
@@ -250,12 +248,6 @@ static int hexVal(char c)
 
 static std::string urlDecode(const std::string& s)
 {
-	/*1. urlDecode no rechaza secuencias peligrosas
-	Decodifica %2F → / sin restricciones. Eso significa que una URL como /files%2F..%2F..%2Fetc%2Fpasswd se convierte en /files/../../../etc/passwd antes de que tu código compruebe el path. Si isWithinRoot se aplica después de decodificar, está cubierto — pero si se aplica antes, tienes un path traversal.
-	Asegúrate de que el flujo sea siempre:
-	urlDecode → normalizar path → isWithinRoot → acceder al fichero
-	Y nunca al revés.
-	Todo lo demás está correcto — el manejo de % incompletos (cuando i + 2 < s.size() falla, pasa el % literal), los valores hex con mayúsculas y minúsculas, y el reserve para evitar reallocaciones. Buen código.*/
 	std::string out;
 	out.reserve(s.size());
 	for (size_t i = 0; i < s.size(); ++i)
@@ -277,22 +269,18 @@ static std::string urlDecode(const std::string& s)
 	return out;
 }
 
-// Return directory part of a filesystem path, or empty if none.
 static std::string getDirectory(const std::string& path)
 {
-	/*1. Eliminar ./ al principio puede cambiar el path de forma incorrecta
-	Si el path es ./foo/bar.txt, eliminas el ./ y te queda foo/bar.txt, cuyo directorio es foo — correcto. Pero si el path es ././foo, eliminas dos veces y también funciona. El problema es que si el path es ./../foo, solo eliminas el primer ./ y te queda ../foo, que es un path relativo que sube un nivel. Si esta función se usa antes de isWithinRoot, ese .. puede ser peligroso. Comprueba que el path ya esté normalizado y sin .. antes de llamarla.
-	2. No maneja // ni paths con .. en el medio
-	/foo/../bar devuelve /foo/.., no /bar. Nuevamente, si los paths ya vienen normalizados desde antes no es un problema, pero la función no lo documenta como precondición.
-	3. El nombre getDirectory es genérico — en el estándar C++ esto es equivalente a dirname. Si en algún momento incluyes <libgen.h> en otro fichero podrías tener conflicto de nombres al ser static. No es un problema real pero vale la pena el comentario.*/
-	if (path.empty()) return std::string();
-	// Remove leading "./" segments which indicate current directory
+	if (path.empty())
+		return std::string();
 	std::string p = path;
 	while (p.size() >= 2 && p[0] == '.' && p[1] == '/')
 		p = p.substr(2);
 	size_t pos = p.find_last_of('/');
-	if (pos == std::string::npos) return std::string();
-	if (pos == 0) return std::string("/");
+	if (pos == std::string::npos)
+		return std::string();
+	if (pos == 0)
+		return std::string("/");
 	return p.substr(0, pos);
 }
 
@@ -301,7 +289,6 @@ void Client::	chargeHeader()
 	ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer) - 1, 0); // sustituir el tamaño del buffer a una macro
 	if (bytesRead < 0)
 	{
-		// In non-blocking mode, EAGAIN/EWOULDBLOCK mean "no data available now" — not a fatal error.
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
 			return;
 		std::cerr << "Error reading from socket (fd " << this->_fd << "): " << strerror(errno) << std::endl;
@@ -309,8 +296,6 @@ void Client::	chargeHeader()
 	}
 	else if (bytesRead == 0)
 	{
-		// cliente cerró la conexión: if we already have the expected body length,
-		// mark body ready. Otherwise treat as premature EOF and set an error.
 		if (!this->_headerContent.isChunked)
 		{
 			if (this->_headerContent.ContentLength != 0)
@@ -323,13 +308,11 @@ void Client::	chargeHeader()
 					this->_request[1] = this->_body;
 					return;
 				}
-				// premature EOF
 				this->_status = 400;
 				return;
 			}
 			else
 			{
-				// No Content-Length and connection closed -> accept current body
 				this->_isBodyReady = true;
 				this->_request[1] = this->_body;
 				return;
@@ -338,39 +321,30 @@ void Client::	chargeHeader()
 		else
 		{
 			if (this->_isBodyReady)
-			{
-				// Chunked body already completed; EOF after the final chunk is normal.
 				return;
-			}
-			// For chunked transfer, rely on chunkManagement to set _isBodyReady; treat this as error
 			this->_status = 400;
 			return;
 		}
 	}
 	else
 	{
-		this->_buffer[bytesRead] = '\0'; // Null-terminate the buffer
-		this->_header += this->_buffer; // Append to the request string
+		this->_buffer[bytesRead] = '\0';
+		this->_header += this->_buffer;
 		size_t headerEnd = this->_header.find("\r\n\r\n");
-		if (headerEnd == std::string::npos &&_header.size() > 8192) // Arbitrary limit to prevent header overflow
+		if (headerEnd == std::string::npos &&_header.size() > 8192)
 		{
 			_status = 431;
 			_isHeaderReady = true;
 			_isBodyReady = true;
 			return ;
 		}
-		if (headerEnd != std::string::npos) // End of headers
+		if (headerEnd != std::string::npos)
 		{
-			// Preserve the full buffer so we can extract a body that may have
-			// been received together with the headers in the same recv().
 			std::string full = this->_header;
 			this->_header = full.substr(0, headerEnd);
 			std::cout << "chargeHeader: headerEnd=" << headerEnd << " full.size=" << full.size() << "\n";
             std::cout << "CHARGE HEADER1\n";
 			this->parseHeader();
-			// If client included 'Expect: 100-continue' we must acknowledge it
-			// so browsers will proceed to send the request body.
-			
 			std::string lower = strToLower(this->_header);
 			if (lower.find("expect: 100-continue") != std::string::npos)
 			{
@@ -385,7 +359,6 @@ void Client::	chargeHeader()
 					return;
 				}
 			}
-			
 			std::cout << "after parseHeader: ContentLength=" << this->_headerContent.ContentLength << " isChunked=" << this->_headerContent.isChunked << " method=" << this->_headerContent.method << "\n";
 			std::cout << this->_header << std::endl;
             std::cout << "CHARGE HEADER2\n";
@@ -404,12 +377,17 @@ void Client::	chargeHeader()
             std::cout << "CHARGE HEADER3\n";
 			std::cout << "error: " << this->_status << std::endl;
 			std::cout << "header path: " << this->_headerContent.path << std::endl;
+			// Try to start CGI now if the request targets a CGI script.
+			// Previously CGI start was deferred until the body was fully received,
+			// which required a prior GET in some tests. Starting CGI early allows
+			// the CGI process to be created and its stdin kept open so the POST
+			// body can be streamed to it as it arrives.
+			this->handleCgiIfNeeded();
 			if (this->_headerContent.method == "POST")
 			{
 				if (headerEnd + 4 < full.size())
 				{
 					std::string extra = full.substr(headerEnd + 4);
-					// If Transfer-Encoding: chunked, feed chunk data into chunkLine and try to parse
 					if (this->_headerContent.isChunked)
 					{
 						this->_chunkLine += extra;
@@ -422,7 +400,6 @@ void Client::	chargeHeader()
 					else
 					{
 						this->_body = extra;
-						// If we already have the full body according to Content-Length, mark ready
 						if (this->_headerContent.ContentLength != 0 && this->_body.size() >= this->_headerContent.ContentLength)
 						{
 							if (this->_body.size() > this->_headerContent.ContentLength)
@@ -433,21 +410,6 @@ void Client::	chargeHeader()
 						}
 						else if (this->_headerContent.ContentLength == 0)
 						{
-							// Fallback: headers parsing didn't capture Content-Length but body bytes arrived
-							/*This branch triggers when some bytes have been accumulated in this->_body but the parsed headers report ContentLength == 0.
-							In that case the code treats the currently buffered bytes as the full request body: it sets headerContent.
-							ContentLength to the buffer size, marks the body ready with _isBodyReady = true, copies the buffer into _request[1], and emits a debug message with the size.
-							
-							The intent is a simple fallback for situations where header parsing failed to capture a Content-Length value (or the header was omitted) but body bytes nonetheless arrived.
-							By stamping the header with the observed length and marking the body ready, the rest of the request pipeline can proceed as if a Content-Length had been provided.
-							
-							Suggested improvements:
-							- verify the request method and Transfer-Encoding before applying this fallback
-								(only treat the buffer-as-body when HTTP framing semantics allow it, e.g., when the connection will be closed to signal end-of-body).
-							- Add size limits and validation, ensure request has the expected structure before writing to index 1, replace std::cout with a proper logger,
-								and add explicit handling for chunked encoding or for reading until connection close if Content-Length is absent.
-							Estas cambios hacen el fallback más seguro y robusto.
-							*/
 							_status = 411;
 							this->_isBodyReady = true;
 							return ;
@@ -455,12 +417,11 @@ void Client::	chargeHeader()
 					}
 				}
 			}
-			this->_request[0] = this->_header.substr(0, this->_header.find("\r\n")); // Request line
+			this->_request[0] = this->_header.substr(0, this->_header.find("\r\n"));
 			_isHeaderReady = true;
 			if (_headerContent.method != "POST")
 				_isBodyReady = true;
 		}
-		//ft_bzero(this->_buffer, sizeof(this->_buffer));
 	}
 }
 
@@ -480,9 +441,6 @@ static bool setNonBlocking(int fd)
     return (fcntl(fd, F_SETFL, flags) != -1);
 }
 
-/* Build a new envp (char*[] terminated by NULL) by merging parent_env and
-   extra variables (extras). The returned envp is allocated with new[] and
-   each string with new[]. Caller must free with freeEnvp(). */
 static void freeEnvp(char **envp);
 static char **buildEnvpFromMapAndParent(const std::map<std::string, std::string>& extras, char **parent_env)
 {
@@ -493,14 +451,15 @@ static char **buildEnvpFromMapAndParent(const std::map<std::string, std::string>
 		{
 			std::string s(*p);
 			size_t eq = s.find('=');
-			if (eq == std::string::npos) continue;
+			if (eq == std::string::npos)
+				continue;
 			std::string k = s.substr(0, eq);
 			std::string v = s.substr(eq + 1);
 			merged[k] = v;
 		}
 	}
 	for (std::map<std::string, std::string>::const_iterator it = extras.begin(); it != extras.end(); ++it)
-		merged[it->first] = it->second; // override or insert
+		merged[it->first] = it->second;
 	char **envp = new char*[merged.size() + 1];
 	try
 	{
@@ -509,9 +468,9 @@ static char **buildEnvpFromMapAndParent(const std::map<std::string, std::string>
 		for (std::map<std::string,std::string>::const_iterator it = merged.begin(); it != merged.end(); ++it)
 		{
 			std::string kv = it->first + "=" + it->second;
-		envp[i] = new char[kv.size() + 1];
-		std::memcpy(envp[i], kv.c_str(), kv.size() + 1);
-		++i;
+			envp[i] = new char[kv.size() + 1];
+			std::memcpy(envp[i], kv.c_str(), kv.size() + 1);
+			++i;
 		}
 		envp[i] = NULL;
 		return envp;
@@ -526,7 +485,8 @@ static char **buildEnvpFromMapAndParent(const std::map<std::string, std::string>
 
 static void freeEnvp(char **envp)
 {
-	if (!envp) return;
+	if (!envp)
+		return;
 	for (char **p = envp; *p != NULL; ++p)
 		delete [] *p;
 	delete [] envp;
@@ -554,9 +514,10 @@ bool Client::parentProcess(int *inpipe, int *outpipe, pid_t pid)
 	setNonBlocking(_cgi.out_fd);
 	if (_cgi.write_buf.empty() && _cgi.in_fd >= 0)
 	{
-	    close(_cgi.in_fd);
-	    _cgi.in_fd = -1;
-	    _cgi.in_closed = true;
+    	// Do NOT close the CGI stdin here if there's no data yet.
+    	// Keep the pipe open so we can stream the POST body as it arrives.
+    	// Closing it here causes early EOF for the CGI when starting it
+    	// before the client has sent the body.
 	}
 	std::cerr << "startCgiNonBlocking (parent): pid=" << pid
 	          << " in_fd=" << _cgi.in_fd
@@ -649,7 +610,6 @@ bool Client::startCgiNonBlocking(const std::string& scriptPath, const std::strin
 		for (size_t ai = 0; ai < argc; ++ai)
 			argv_exec[ai] = const_cast<char*>(argv_store[ai].c_str());
 		argv_exec[argc] = NULL;
-		// Build richer CGI env from available request data and inherit parent's env
 		std::map<std::string,std::string> extras;
 		extras["REQUEST_METHOD"] = _headerContent.method;
 		extras["SERVER_PROTOCOL"] = _headerContent.protocol;
@@ -753,7 +713,6 @@ void Client::handleCgiFdEvent(int fd, short revents)
 {
 	if (!isCgiRunning())
 		return ;
-	std::cerr << "handleCgiFdEvent: fd=" << fd << " revents=" << revents << "\n";
 	if (revents & (POLLHUP | POLLERR | POLLNVAL))
     {
         if (fd == _cgi.in_fd && _cgi.in_fd >= 0)
@@ -826,7 +785,6 @@ void Client::finalizeCgiIfDone()
 	{
 		if (_cgi.finalized)
 			return;
-		std::cerr << "cacota gorda\n";
 		return ;
 	}
 	int	status = 0;
@@ -902,27 +860,39 @@ void Client::finalizeCgiIfDone()
 				--len;
 			std::string line = cgiHeaders.substr(pos, len);
 			size_t i = 0;
-			while (i < line.size() && std::isspace(static_cast<unsigned char>(line[i]))) ++i;
+			while (i < line.size() && std::isspace(static_cast<unsigned char>(line[i])))
+				++i;
 			if (i < line.size()) line = line.substr(i);
 
 			if (line.size() >= 7 && line.find("Status:") == 0)
 			{
 				size_t j = 7;
-				while (j < line.size() && std::isspace(static_cast<unsigned char>(line[j]))) ++j;
+				while (j < line.size() && std::isspace(static_cast<unsigned char>(line[j])))
+					++j;
 				std::string num;
-				while (j < line.size() && std::isdigit(static_cast<unsigned char>(line[j]))) { num.push_back(line[j]); ++j; }
-				if (!num.empty()) { std::istringstream ss(num); ss >> cgiStatus; }
+				while (j < line.size() && std::isdigit(static_cast<unsigned char>(line[j])))
+				{
+					num.push_back(line[j]);
+					++j;
+				}
+				if (!num.empty())
+				{
+					std::istringstream ss(num);
+					ss >> cgiStatus;
+				}
 			}
 			else if (line.size() >= 13 && strncasecmp(line.c_str(), "Content-Type:", 13) == 0)
 			{
 				size_t k = 13;
-				while (k < line.size() && std::isspace(static_cast<unsigned char>(line[k]))) ++k;
+				while (k < line.size() && std::isspace(static_cast<unsigned char>(line[k])))
+					++k;
 				_cgiContentType = line.substr(k);
 			}
 			else if (line.size() >= 15 && strncasecmp(line.c_str(), "Content-Length:", 15) == 0)
 			{
 				size_t k = 15;
-				while (k < line.size() && std::isspace(static_cast<unsigned char>(line[k]))) ++k;
+				while (k < line.size() && std::isspace(static_cast<unsigned char>(line[k])))
+					++k;
 				std::string num = line.substr(k);
 				std::istringstream ss(num);
 				size_t clen = 0; ss >> clen;
@@ -934,8 +904,6 @@ void Client::finalizeCgiIfDone()
 	this->_status = cgiStatus;
 	this->_isBodyReady = true;
 	_cgi.finalized = true;
-	//Printeo a borrar:
-	std::cerr << "finalizeCgiIfDone: client fd=" << this->_fd << " status=" << this->_status << " body_size=" << this->_body.size() << "\n";
 	if (_cgi.in_fd >= 0)
 	{
 		close(_cgi.in_fd);
@@ -1061,13 +1029,11 @@ void Client::parseHeader()
 	}
 	std::cout << "protocol: " << token << std::endl;
 	this->_headerContent.protocol = token;
-	// si falla eliminar hasta linea 674
 	std::string lower = strToLower(this->_header);
     size_t pos = lower.find("host:");
     if (pos != std::string::npos)
     {
         size_t valStart = pos + 5;
-        // avanzar sobre espacios
         while (valStart < this->_header.size() && (this->_header[valStart] == ' ' || this->_header[valStart] == '\t'))
             ++valStart;
         size_t valEnd = this->_header.find("\r\n", valStart);
@@ -1109,7 +1075,6 @@ void Client::parseHeader()
 			size_t colonPos = line.find(":");
 			if (colonPos == std::string::npos)
 			{
-				std::cout << "invalid header line: " << line << std::endl;
 				this->_status = 400;
 				return;
 			}
@@ -1143,8 +1108,6 @@ void Client::parseHeader()
 					this->_headerContent.isChunked = true;
 			}
 		}
-		//std::cerr << "parseHeader: headers_received=" << this->_header << "\n";
-		//std::cerr << "parseHeader: ContentLength=" << this->_headerContent.ContentLength << " isChunked=" << this->_headerContent.isChunked << "\n";
 	}
 }
 
@@ -1189,19 +1152,14 @@ void	Client::setPath()
 		autoindex = false;
 		for (; it != end; ++it)
 		{
-			std::cout << "it->path: " << it->path << " | _headerContent.path: " << _headerContent.path << " | path.size: " << it->path.size() << " | headercontent.path.size: " << _headerContent.path.size() << " | compare: " << _headerContent.path.compare(0, it->path.size(), it->path) << std::endl;
 			if (it->path.size() <= _headerContent.path.size() && _headerContent.path.compare(0, it->path.size(), it->path) == 0)
 			{
 				_isLocation = true;
 				_location = *it;
-				//std::cout << "it->path: " << it->path << std::endl;
 				if (checkMethod(_headerContent.method, it->allowed_methods) == false)
 				{
-					//std::cout << "method: |" << _headerContent.method << " size methods: " << it->allowed_methods.size() << "|\n";
 					for (size_t i = 0; i < it->allowed_methods.size(); ++i)
-					{
 						std::cout << it->allowed_methods[i] << std::endl;
-					}
 					_status = 405;
 					return ;
 				}
@@ -1269,10 +1227,8 @@ static std::string	normalizePath(const std::string& p)
 	bool absolute = (path[0] =='/');
 	std::vector<std::string> parts;
 	size_t	i = 0;
-	//std::cout << "path:" <<path << " i: " << i << "AHHHHHHH\n";
 	while (i < path.size())
 	{
-		// skip consecutive '/'
 		while (i < path.size() && path[i] == '/')
 			++i;
 		if (i >= path.size())
@@ -1362,7 +1318,6 @@ void	Client::checkPathValidity(std::string& path, std::vector<std::string>& inde
 				std::string							needle;
 				for (; it != end; ++it)
 				{
-					std::cout << "index: " << joinPath(path, *it) << std::endl;
 					if (access(joinPath(path, *it).c_str(), F_OK) == 0 || this->_headerContent.method == "POST")
 					{
 						if (access(joinPath(path, *it).c_str(), R_OK) != 0 && this->_headerContent.method != "POST")
@@ -1372,47 +1327,28 @@ void	Client::checkPathValidity(std::string& path, std::vector<std::string>& inde
 						}
 						if (!isWithinRoot(joinPath(path, *it), root) && this->_headerContent.method != "POST")
 						{
-							std::cout << "PATH EN IF: " << path << std::endl; 
 							_status = 403;
 							return ;
 						}
-						std::cout << "DENTRO DE IF\n";
-						/*if (checkExtention(path, ".py") == true)
-							;*/
-							//comprobar si el path tiene una extension para cgi
-						// For POST requests we should not automatically map a directory to
-						// its index file; a POST to a directory usually means "create a new
-						// resource inside this directory". Mapping to index would make the
-						// server overwrite the index file.
 						if (this->_headerContent.method != "POST")
 							_headerContent.path = joinPath(_headerContent.path, *it);
-						// If method is POST, keep _headerContent.path pointing to the
-						// directory so later logic can create a new file inside it.
 						return ;
 					}
 				}
 			}
 			if (autoindex == true)
-				// generar body de la respuesta con el listado del directorio
-				// mark to produce autoindex HTML in sendResponse
 				_headerContent.isAutoindexResponse = true;
 			else
-			{
-				std::cout << "sale por aqui. Path: " << path << ". Root: " << root << std::endl;
 				_status = 403;
-			}
 			return ;
 		}
 	}
-	// If file doesn't exist: for POST we allow creating new resources, so
-	// do not set 404 here; caller (e.g., sendResponse) will handle creation.
 	if (this->_headerContent.method == "POST")
 		return;
-
 	_status = 404;
 }
 
-std::string	Client::joinPath(const std::string& a, const std::string& b) // revisar esta funcion
+std::string	Client::joinPath(const std::string& a, const std::string& b)
 {
     if (a[a.size() - 1] == '/')
 	{
@@ -1421,7 +1357,7 @@ std::string	Client::joinPath(const std::string& a, const std::string& b) // revi
 	return a + "/" + b;
 }
 
-void	Client::chunkManagement() //corregir esto
+void	Client::chunkManagement()
 {
 	size_t		i;
 	size_t		sublen;
@@ -1437,11 +1373,9 @@ void	Client::chunkManagement() //corregir esto
 				return ;
 			hexLen = this->_chunkLine.substr(0, i);
 			this->_chunkLen = hexToDecimal(hexLen);
-			// remove the chunk-size line including CRLF so the buffer starts at chunk-data
 			this->_chunkLine.erase(0, i + 2);
 			if (this->_chunkLen == 0)
 			{
-				// final chunk: consume the following CRLF if present and mark body ready
 				if (this->_chunkLine.size() >= 2 && this->_chunkLine[0] == '\r' && this->_chunkLine[1] == '\n')
 					this->_chunkLine.erase(0, 2);
 				this->_isBodyReady = true;
@@ -1453,7 +1387,10 @@ void	Client::chunkManagement() //corregir esto
 		{
 			sublen = this->_chunkLine.size();
 			this->_chunkLen -= sublen;
-			this->_body += this->_chunkLine.substr(0, sublen);
+			if (isCgiRunning())
+				_cgi.write_buf += this->_chunkLine.substr(0, sublen);
+			else
+				this->_body += this->_chunkLine.substr(0, sublen);
 			this->_chunkLine.erase(0, sublen);
 			return ;
 		}
@@ -1463,7 +1400,10 @@ void	Client::chunkManagement() //corregir esto
     		this->_status = 400;
     		return ;
 		}
-		this->_body += this->_chunkLine.substr(0, sublen);
+		if (isCgiRunning())
+			_cgi.write_buf += this->_chunkLine.substr(0, sublen);
+		else
+			this->_body += this->_chunkLine.substr(0, sublen);
     	this->_chunkLine.erase(0, this->_chunkLen + 2);
     	this->_chunkLen = 0;
 	}
@@ -1475,13 +1415,8 @@ void	Client::chunkManagement() //corregir esto
 		{
 			return ;
 		}
-		// If a previous check set status 413, ignore any further body bytes.
 		if (this->_status == 413)
-		{
-			// For non-blocking handling we simply return and let the main loop
-			// send the error response; avoid accumulating body bytes.
 			return;
-		}
 		//std::cout << "ENTER chargeBody fd=" << this->_fd << " path=" << this->_headerContent.path << "\n";
 		ssize_t bytesRead = recv(this->_fd, this->_buffer, sizeof(this->_buffer), 0); // sustituir el tamaño del buffer a una macro
 		//std::cout << "chargeBody: recv returned " << bytesRead << " on fd=" << this->_fd << "\n";
@@ -1544,15 +1479,30 @@ void	Client::chunkManagement() //corregir esto
 				ft_bzero(this->_buffer, sizeof(this->_buffer));
 				return ;
 			}
-		this->_body.append(this->_buffer, bytesRead); // Append raw bytes
-		std::cerr << "chargeBody: fd=" << this->_fd << " recv=" << bytesRead << " total_body=" << this->_body.size() << " target=" << this->_headerContent.ContentLength << "\n";
-			if (this->_headerContent.ContentLength <= this->_body.size())
+		// If a CGI process is running, stream data to its stdin buffer instead
+		if (isCgiRunning()) {
+			_cgi.write_buf.append(this->_buffer, bytesRead);
+			std::cerr << "chargeBody: streaming to CGI fd=" << this->_cgi.in_fd << " recv=" << bytesRead << " cgi_buf=" << _cgi.write_buf.size() << "\n";
+		} else {
+			this->_body.append(this->_buffer, bytesRead); // Append raw bytes
+			std::cerr << "chargeBody: fd=" << this->_fd << " recv=" << bytesRead << " total_body=" << this->_body.size() << " target=" << this->_headerContent.ContentLength << "\n";
+		}
+		if (this->_headerContent.ContentLength <= (isCgiRunning() ? _cgi.write_buf.size() : this->_body.size()))
 			{
+			if (isCgiRunning()) {
+				if (_cgi.write_buf.size() > this->_headerContent.ContentLength)
+					_cgi.write_buf = _cgi.write_buf.substr(0, this->_headerContent.ContentLength);
+				// When we've queued all expected bytes to the CGI write buffer, mark body ready
+				this->_isBodyReady = true;
+				this->_request[1] = _cgi.write_buf;
+				std::cout << "CHARGE BODY: streamed to CGI, queued size=" << _cgi.write_buf.size() << "\n";
+			} else {
 				if (this->_body.size() > this->_headerContent.ContentLength)
 					this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
 				this->_isBodyReady = true;
 				this->_request[1] = this->_body;
 				std::cout << "CHARGE BODY: body ready, size=" << this->_body.size() << "\n";
+			}
 			}
 			ft_bzero(this->_buffer, sizeof(this->_buffer));
 		}
