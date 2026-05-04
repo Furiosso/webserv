@@ -100,6 +100,7 @@ public:
 	void		handleDelete();
 	std::string getHeaderHost() const;
 	void		setListener(const Server& s);
+	bool		parentProcess(int *inpipe, int *outpipe, pid_t pid);
 
 };
 
