@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 
-//AUXILIAR PARA PRINTEO DE SERVER
+//AUXILIAR PARA PRINTEO DE SERVER PARSEADO
 static void printVector(const std::vector<std::string>& v)
 {
     for (std::vector<std::string>::size_type i = 0; i < v.size(); ++i)
@@ -33,6 +33,7 @@ int main (int argc, char** argv, char** env)
     {
         std::vector<Server> servers;
         Parser              parser(argv[1], servers);
+		//AQUI EMPIEZA EL PRINTEO DE LOS SERVER PARSEADOS
         for (std::vector<Server>::size_type i = 0; i < servers.size(); ++i)
         {
             const ServerConfig& cfg = servers[i].getConfig();
@@ -55,7 +56,6 @@ int main (int argc, char** argv, char** env)
             std::cout << std::boolalpha;
             std::cout << "Autoindex: " << cfg.autoindex << "\n";
             std::cout << "Root: " << cfg.root << "\n";
-            //std::cout << "Alias: " << cfg.alias << "\n";
             std::cout << "Server name: " << cfg.server_name << "\n";
             std::cout << "Client max body size: " << cfg.client_max_body_size << "\n";
 
@@ -68,8 +68,6 @@ int main (int argc, char** argv, char** env)
                  it != cfg.error_pages.end(); ++it)
                 std::cout << "  " << it->first.first << " | " << it->first.second << " -> " << it->second << "\n";
 
-            //std::cout << "isRootOrAlias: " << cfg.isRootOrAlias << "\n";
-
             std::cout << "Locations (" << cfg.locations.size() << "):\n";
             for (std::vector<LocationConfig>::size_type j = 0; j < cfg.locations.size(); ++j)
             {
@@ -77,7 +75,6 @@ int main (int argc, char** argv, char** env)
                 std::cout << "  -- Location #" << j << " --\n";
                 std::cout << "    Path: " << loc.path << "\n";
                 std::cout << "    Root: " << loc.root << "\n";
-                //std::cout << "    Alias: " << loc.alias << "\n";
                 std::cout << "    Index: ";
                 printVector(loc.index);
                 std::cout << "\n";
@@ -92,11 +89,11 @@ int main (int argc, char** argv, char** env)
                 for (std::map<std::pair<int, int>, std::string>::const_iterator it = loc.error_pages.begin(); it != loc.error_pages.end(); ++it)
                     std::cout << "      " << it->first.first << " | " << it->first.second << " -> " << it->second << "\n";
                 std::cout << "    Autoindex: " << loc.autoindex << "\n";
-                //std::cout << "    isRootOrAlias: " << loc.isRootOrAlias << "\n";
             }
 
             std::cout << std::noboolalpha << "======================\n\n";
         }
+		//AQUI ACABA EL PRINTEO
         ServerSocket sockman;
         if (!sockman.createListeners(servers))
         {
@@ -113,16 +110,24 @@ int main (int argc, char** argv, char** env)
         if (sigprocmask(SIG_BLOCK, &mask, NULL) == 0) {
             sigfd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
             if (sigfd >= 0) {
-                struct pollfd p; p.fd = sigfd; p.events = POLLIN; p.revents = 0; pollfds.push_back(p);
-            } else {
+                struct pollfd p;
+                p.fd = sigfd; p.events = POLLIN;
+                p.revents = 0;
+                pollfds.push_back(p);
+            }
+            else
+            {
                 std::cerr << "Warning: failed to create signalfd: " << strerror(errno) << "\n";
             }
-        } else {
+        }
+        else
+        {
             std::cerr << "Warning: failed to block signals for signalfd: " << strerror(errno) << "\n";
         }
         std::vector<Client> clients;
     	std::map<int, int> cgiFdToClientIdx;
-        struct CgiHelpers {
+        //METER ESTA ESTRUCTURA EN UN HEADER
+		struct CgiHelpers {
             static void registerCgiFd(std::vector<struct pollfd>& pollfds, std::map<int, int>& map, int fd, int clientSock, short events) {
                 if (fd < 0) return;
                 struct pollfd p; p.fd = fd; p.events = events; p.revents = 0; pollfds.push_back(p);

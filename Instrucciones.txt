@@ -1,0 +1,14 @@
+Antes de cambiar nada, prueba el servidor, con curl y desde un navegador.
+
+Si te salta un unexpected exception al ejecutar cambia las direcciones que observas en el default.conf por las tuyas.
+Ej:
+	Si ves esto: alias /home/pavicent/webserv/www/eg_delacruz/upload/borrar.txt;
+	Pon algo como esto: alias /home/amonteag/webserv/www/eg_delacruz/upload/borrar.txt;
+Es importante que las carpetas que haya en el servidor existan en tu ordenador. Si no existen no podras probarlo.
+
+
+Al cambiar cosas relacionadas con el cgi:
+1. Prueba a subir una foto como la que tienes en ./jfercode/test.jpeg desde la web 127.0.0.1:9999 (No debe fallar, tienes que poder ver la foto desde vscode en la carpeta /upload una vez subida)
+2. Prueba a borrar esa foto desde la parte de delete de la web (No  debe fallar)
+3. Prueba a ir a la direccion 127.0.0.1:9999/cgi-bin/test.py (No debe fallar)
+4. Intenta ejecutar el test ./tests/cgi_post_tests.sh (A veces falla, no te preocupes)

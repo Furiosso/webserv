@@ -366,13 +366,6 @@ void	Parser::serverNameParser(std::vector<std::string>::iterator& it,Server& ser
 		size_t		i = 0;
 		str = *it;
 		prev = 0;
-
-        /*4. serverNameParser — lanza error si es una IP válida
-        if (!check_ipv4(str))
-        { valida como nombre }
-        else
-        throw std::runtime_error(...);
-        Esto impide usar una IP como server_name, lo cual es válido en nginx. Puede ser intencional, pero vale la pena comentarlo explícitamente.   */
 		if (!check_ipv4(str))
 		{
 			while (i < str.length())
@@ -514,14 +507,15 @@ void	Parser::chooseIndexState(std::string str)
 			throw std::runtime_error("Parser: configuration error");*/
 		it++;
 	}
-	if (prev != 5 && prev != 8 && prev != 9)
-			/*throw std::runtime_error("Parser: configuration error")*/;
+	/*if (prev != 5 && prev != 8 && prev != 9)
+			throw std::runtime_error("Parser: configuration error");*/
+	
+	//NO TOCAR ESTOS COMENTARIOS SOLO ELIMINAR ESTE <--
 }
 
 void	Parser::indexParser(std::vector<std::string>::iterator& it,Server& server)
 {
 	std::string			str;
-
 	++it;
 	while (*it != ";")
 	{
@@ -530,14 +524,10 @@ void	Parser::indexParser(std::vector<std::string>::iterator& it,Server& server)
         server.addIndex(*it);
 		++it;
 	}
-
 }
 
 int    isCgiWord(std::string& token)
 {
-    /*5. isCgiWord itera hasta 15 pero cgikeys solo tiene 4 elementos
-    cppfor (size_t i = 0; i < 15; i++)  // ← fuera de rango
-    cgikeys[4] — igual que isConfigWord itera hasta 15 pero configkeys[16] tiene 16 elementos, así que ese está bien. Cambia el límite de isCgiWord a 4.*/
     for (size_t i = 0; i < 15; i++)
     {
         if (token == cgikeys[i])
@@ -549,7 +539,6 @@ int    isCgiWord(std::string& token)
 void	Parser::cgiParser(std::vector<std::string>::iterator& it, Server& server)
 {
 	std::string			str;
-
 	++it;
     str = *it;
     if (*(it + 2) != ";" || !isCgiWord(str))
@@ -566,10 +555,6 @@ void    Parser::rootParser(std::vector<std::string>::iterator& it, Server& serve
     if (*(it + 2) != ";" || server.getConfig().isRoot == true || server.getConfig().isAlias == true)
         throw std::runtime_error("Parser: configuration error");
     ++it;
-    //if (access((*it).c_str(), F_OK) != 0)
-    //{
-    //    throw std::exception();
-    //}
     if (n == 1)
         throw std::runtime_error("Parser: configuration error");
     server.setRoot(*it, n);
@@ -580,7 +565,7 @@ void    Parser::rootLocParser(std::vector<std::string>::iterator& it, LocationCo
     if (*(it + 2) != ";")
         throw std::runtime_error("Parser: configuration error");
     ++it;
-    if (loc.isRoot == false && loc.isAlias == false) // comprobar que esté bien
+    if (loc.isRoot == false && loc.isAlias == false)
     {
 		loc.root = *it;
         if (i == 0)
@@ -836,20 +821,17 @@ void	Parser::checkServerNames(std::vector<Server>& servers)
         const std::string &name = servers[i].getConfig().server_name;
         if (name.empty())
             continue;
-        // insertar y comprobar si ya existía
         std::pair<std::set<std::string>::iterator, bool> res = seen.insert(name);
         if (!res.second)
         {
             std::cerr << "Duplicate server_name '" << name << "' between servers (first occurrence and index " << i << ")\n";
         }
-        /*9. checkServerNames solo avisa con cerr pero no lanza — checkListen sí lanza. Inconsistente.*/
     }
 }
 
 Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCounter(0)
 {
 	_infile.open(in_file);
-	//std::ifstream   config_file(in_file);
     std::vector<std::string>::iterator  it;
     std::vector<std::string>::iterator  end;
 
@@ -861,12 +843,7 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
         _infile.close();
         throw std::runtime_error("Parser: tokenize failed (mismatched braces or too many braces)");
     }
-    if (this->chooseState(this->_tokens))
-        ;
-    /*. chooseState valida sintaxis pero no lanza excepción — devuelve 1 pero en el constructor lo ignorás:
-    cppif (this->chooseState(this->_tokens))
-    ;  // ← no hace nada
-    Deberías lanzar una excepción aquí igual que con tokenize.*/
+    this->chooseState(this->_tokens);
     it = _tokens.begin();
     end = _tokens.end();
     int i = 0;
@@ -901,7 +878,6 @@ Parser::Parser(const char* in_file, std::vector<Server>& servers) : _serverCount
             this->rootParser(it, servers[i], 0);
         if (*it == "alias")
             throw std::runtime_error("Parser: 'alias' directive not supported in this parser");
-            //this->rootParser(it, servers[i], 1);
 		if (*it == "location")
 		{
 			while (*it != "}")
@@ -949,7 +925,6 @@ int    Parser::tokenize()
                 ++curly_braces;
                 if (curly_braces > 2)
                     return 1;
-                    //throw std::exception();// cerrar  config_file y devolver error o excepcion
                 break ;
             case '}':
                 if (!token.empty())

@@ -2,14 +2,11 @@
 
 Server::Server() : _fd(-1)
 {
-	//_config.listen.insert(std::pair<std::string, std::string>("127.0.0.1", "80"));
-	//si a la hora de transmitir la informacion a getaddrinfo listen.size es igual a 0 intorducir en ese momento los valores por defecto
 	_config.autoindex = false;
 	_config.allowed_methods.push_back("GET");
 	_config.allowed_methods.push_back("POST");
 	_config.allowed_methods.push_back("DELETE");
-	//_config.isRootOrAlias = false;
-	_config.root = "./www/jfercode";
+	_config.root = "./www/jfercode/index.html"; //cambiar en el futuro, de momento NO TOCAR
 	_config.isRoot = false;
 	_config.isAlias = false;
 	_config.isAutoindex = false;
@@ -85,7 +82,6 @@ void	Server::setAllowedMethods(const std::vector<std::string>& m)
 const ServerConfig&	Server::getConfig() const
 {
 	return _config;
-	//volver a la version anterior en el que devuelve una referencia constante y el método es constante una vez esté correctamente configurada el método charge status data en la clase Client
 }
 
 void	Server::setFd(int fd)

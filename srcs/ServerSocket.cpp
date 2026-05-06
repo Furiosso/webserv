@@ -1,48 +1,5 @@
 #include "ServerSocket.hpp"
 
-/*ServerSocket::ServerSocket(const char* port)
-{
-	struct addrinfo	hints, *res, *p;
-	int				ret;
-
-	ft_bzero(&hints, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    //In the line above, check if the macro is correct
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-	ret = getaddrinfo(NULL, port, &hints, &res);
-	if (ret != 0)
-		std::cerr << gai_strerror(ret);
-	for(p = res; p != NULL; p = p->ai_next)
-	{
-		_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-   		if (_fd != -1)
-		{
-			int opt = 1;
-			if (setsockopt(_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == 0)
-			{
-				if (bind(_fd, p->ai_addr, p->ai_addrlen) == 0)
-				{
-					if (listen(_fd, SOMAXCONN) == 0)
-					{
-						int flags;
-						flags = fcntl(_fd, F_GETFL);
-						flags |= O_NONBLOCK;
-						fcntl(_fd, F_SETFL, flags);
-						break ;
-					}
-				}
-			}
-		}
-		close(_fd);
-		_fd = -1;
-	}
-	freeaddrinfo(res);
-	if (_fd == -1)
-		std::runtime_error("Not valid address found\n");
-}
-*/
-/*int	ServerSocket::get_fd(){ return _fd; }*/
 
 ServerSocket::~ServerSocket()
 {
@@ -60,18 +17,6 @@ static void	restartListenFd(int& listen_fd)
 
 bool	ServerSocket::createListeners(std::vector<Server>& servers)
 {
-	/*
-	1. createListeners — varios servidores comparten el mismo listen_fd si tienen el mismo ip:port
-	Cuando un ip:port ya está en _created, haces continue y no llamas a servers[i].setFd(...). Eso significa que el segundo servidor que escucha en el mismo puerto se queda con _fd sin inicializar (-1 si aplicaste el fix anterior). Necesitas buscar el fd ya creado y asignárselo:
-	cppif (_created.find(key) != _created.end())
-	{
-    	// Buscar el fd ya creado para este ip:port y asignarlo
-    	for (size_t k = 0; k < _listeners.size(); ++k) {
-        // necesitarías un map<pair, int> en lugar de un set para hacer esto bien
-    }
-    	continue;
-	}
-	La solución limpia es cambiar _created de std::set a std::map<std::pair<std::string,std::string>, int> que mapee ip:port → fd.*/
 	int		on = 1;
 	bool	any = false;
 	for (std::vector<Server>::size_type i = 0; i < servers.size(); i++)
@@ -161,8 +106,6 @@ int	ServerSocket::acceptNewClient(int listen_fd)
 	int						client_fd = accept(listen_fd, (struct sockaddr*)&peer, &plen);
 	if (client_fd < 0)
 	{
-		/*if (errno == EAGAIN || errno == EWOULDBLOCK)
-			return -1;*/
 		std::cerr << "accept error: " << strerror(errno) << std::endl;
 		return -1;
 	}
