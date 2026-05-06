@@ -20,8 +20,6 @@ Client::Client(Server& listener, int fd) : _listener(listener), _fd(fd), _status
 	_cgi.in_closed = false;
 	_cgi.out_closed = false;
 	_cgi.finalized = false;
-
-	// do not duplicate env; caller may set it via setEnv
 	env = NULL;
 }
 
@@ -43,13 +41,8 @@ Client::~Client()
 		pid_t w = waitpid(_cgi.pid, &status, WNOHANG);
 		if (w == 0)
 		{
-			// child still running: try kill
 			kill(_cgi.pid, SIGKILL);
 			waitpid(_cgi.pid, &status, 0);
-			/*5. Destructor — waitpid bloqueante como fallback
-			kill(_cgi.pid, SIGKILL);
-			waitpid(_cgi.pid, &status, 0); // ← bloquea
-			Si el proceso hijo no muere inmediatamente tras SIGKILL (raro pero posible en Linux con procesos en estado D), esto bloquea el servidor entero. Para webserv de 42 suele pasar el evaluador, pero es un riesgo real.*/
 		}
 		_cgi.pid = -1;
 	}
@@ -57,10 +50,7 @@ Client::~Client()
 
 void Client::setEnv(char **envp)
 {
-	// store pointer only; do not allocate or free memory
 	env = envp;
-	/*5. setEnv almacena puntero sin ownership claro
-	El comentario dice "do not allocate or free", lo cual está bien — pero si el env original (el char** env del main) se invalida antes de que el Client lo use en CGI, tienes un puntero colgante. Para webserv donde env viene del main y vive todo el programa está bien, pero documéntalo.*/
 }
 
 void Client::setListener(const Server& s) { this->_listener = s; }
@@ -71,18 +61,6 @@ Server	Client::getListener() const { return _listener; }
 
 std::string Client::generateDirectoryListing(const std::string& dirPath, const std::string& requestPath)
 {
-	/*1. generateDirectoryListing — XSS / path injection
-	requestPath se inserta directamente en el HTML sin escapar:
-	html += "<h1>Index of " + requestPath + "</h1>";
-	html += "<a href=\"" + href + name + "\">" + name + "</a>";
-	Si requestPath o name contiene <, >, o ", el HTML se rompe. Para 42 no suelen penalizarlo, pero si el evaluador prueba una URL como /dir/<script> puede causar problemas. Crea una función htmlEscape mínima.
-	2. generateDirectoryListing — name se modifica pero href usa el original
-	std::string name = names[i];  // ← copia original
-	// ...
-	if (S_ISDIR(s.st_mode))
-    	name += "/";              // ← añade / al nombre mostrado
-	html += "<a href=\"" + href + name + "\">" + name + "</a>";  // ← href usa name ya modificado ✓
-	Esto está bien en realidad — el / se añade antes de construir el href. Pero es confuso porque name cumple dos roles (nombre mostrado y parte del href). Mejor usar una variable separada displayName.*/
 	try {
 		DIR* dir = opendir(dirPath.c_str());
 		if (!dir)
@@ -114,8 +92,6 @@ std::string Client::generateDirectoryListing(const std::string& dirPath, const s
 			if (stat(fullPath.c_str(), &s) == 0)
 				if (S_ISDIR(s.st_mode))
 					name += "/";
-			/*3. stat falla silenciosamente
-			Si stat falla (permisos, symlink roto, etc.), name no recibe el / pero tampoco se informa del error. El directorio aparece listado como fichero normal. Aceptable para 42, pero vale la pena un continue o log.*/
 			html += "<a href=\"" + href + name + "\">" + name + "</a>\n";
 		}
 		html += "</pre><hr></body></html>";
@@ -125,8 +101,6 @@ std::string Client::generateDirectoryListing(const std::string& dirPath, const s
 		return std::string();
 	}
 }
-/*4. setClientFd probablemente no se usa
-Tienes _fd que se setea en el constructor. Si setClientFd no se llama en ningún sitio, elimínala — es superficie de error innecesaria.*/
 void Client::setClientFd(int fd) { this->_fd = fd; }
 
 int Client::getClientFd() const { return this->_fd; }
@@ -137,8 +111,6 @@ bool Client::getIsBodyReady() const { return this->_isBodyReady; }
 
 static std::string getMimeType(const std::string& path)
 {
-	/*3. getMimeType — substr en cada comparación es ineficiente
-	Para cada llamada creas un std::string temporal por cada extensión que no coincide. Usa rfind o compara con std::string::compare desde el final. Para webserv no es un problema de rendimiento real, pero es un detalle que un evaluador podría mencionar.*/
 	if (path.size() >= 4 && path.substr(path.size() - 4) == ".jpg") return "image/jpeg";
 	if (path.size() >= 5 && path.substr(path.size() - 5) == ".jpeg") return "image/jpeg";
 	if (path.size() >= 4 && path.substr(path.size() - 4) == ".png") return "image/png";
@@ -157,8 +129,6 @@ static std::string getMimeType(const std::string& path)
 
 static const char* reasonPhrase(int code)
 {
-	/*5. reasonPhrase podría ser inline o estar en un header de utils
-	Es una función estática en Client.cpp, pero reasonPhrase es utilidad genérica HTTP. Si en algún momento necesitas usarla desde otro .cpp tendrás que duplicarla. Para 42 está bien donde está.*/
 	switch (code)
 	{
 		/* 1xx Informational */
@@ -304,9 +274,9 @@ void Client::	chargeHeader()
 				{
 					if (this->_body.size() > this->_headerContent.ContentLength)
 						this->_body = this->_body.substr(0, this->_headerContent.ContentLength);
-					this->_isBodyReady = true;
-					this->_request[1] = this->_body;
-					return;
+				this->_isBodyReady = true;
+				this->_request[1] = this->_body;
+				return;
 				}
 				this->_status = 400;
 				return;
