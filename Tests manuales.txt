@@ -1,0 +1,17 @@
+404 (mira si hay redirect; --max-redirs 0 evita seguirlo):
+curl -i --max-redirs 0 -H "Host: hola.com" http://127.0.0.1:9999/force-404
+
+405 (GET contra location que solo acepta POST):
+curl -i -X GET -H "Host: hola.com" http://127.0.0.1:9999/force-405
+
+403 (acceso a force-403, que apunta fuera del root — puede devolver 403 o 404 según la validación):
+curl -i -H "Host: hola.com" http://127.0.0.1:9999/force-403
+
+413 (envía cuerpo grande; la location tiene client_max_body_size 1):
+perl -e 'print "A"x200' | curl -i -X POST --data-binary @- -H "Host: hola.com" http://127.0.0.1:9999/force-413
+
+200 OK (GET a /prueba/, que usa alias ./www/jfercode/static):
+curl -i -H "Host: hola.com" http://127.0.0.1:9999/prueba/
+
+201 Created (POST que crea un fichero en upload vía /force-201):
+curl -i -X POST -H "Host: hola.com" --data-binary 'hello file' http://127.0.0.1:9999/force-201/newfile-from-curl.txt

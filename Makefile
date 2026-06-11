@@ -4,21 +4,39 @@ CXXFLAGS = -Wall -Wextra -Werror -std=c++98 #-fsanitize="address,leak" -fno-omit
 
 INC			= inc/
 SRCS_DIR	= srcs/
-CFILES		= main.cpp \
-		 	ServerSocket.cpp \
-			utils.cpp Parser.cpp Server.cpp Client.cpp
+CFILES		= \
+			ServerSocket.cpp \
+			Server.cpp \
+			utils.cpp \
+			main/main.cpp \
+			main/print_helpers.cpp \
+			main/signals.cpp \
+			main/cgi_fds.cpp \
+			main/event_loop.cpp \
+			client/Client.cpp \
+			client/client_cgi.cpp \
+			client/client_helpers.cpp \
+			client/client_parsing.cpp \
+			client/client_path.cpp \
+			client/client_response.cpp \
+			parse/Parser.cpp \
+			parse/parser_parsers.cpp \
+			parse/parser_states.cpp \
+			parse/parser_validators.cpp \
+
 
 
 ODIR = build
 
 INCLUDES	= -I$(INC)
 SRCS		= $(addprefix $(SRCS_DIR), $(CFILES))
-OFILES		= $(addprefix $(ODIR)/, $(notdir $(CFILES:.cpp=.o)))
+OFILES		= $(addprefix $(ODIR)/, $(CFILES:.cpp=.o))
 
 all: $(NAME)
 
+
 $(ODIR)/%.o: $(SRCS_DIR)%.cpp
-	@mkdir -p $(ODIR)
+	@mkdir -p $(dir $@)
 	@echo "🛠️  Compiling $<"
 	@$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
